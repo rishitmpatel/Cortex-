@@ -6,9 +6,9 @@
   default-src 'self';
   script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.run;
   style-src 'self' 'unsafe-inline';
-  img-src 'self' data: blob: https://huggingface.co https://cdn-lfs.huggingface.co;
+  img-src 'self' data: blob: https://huggingface.co https://*.huggingface.co https://*.hf.co;
   font-src 'self';
-  connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.run https://huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co https://cdn-lfs-us-1.hf.co https://cas-bridge.xethub.hf.co;
+  connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.run https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co;
   worker-src 'self' blob:;
   base-uri 'self';
   form-action 'none';
@@ -67,13 +67,22 @@ body{
   display:flex;flex-direction:column;min-height:0;
   transition:transform .2s ease;
 }
-#searchWrap{padding:8px;flex:0 0 auto;border-bottom:1px solid var(--line);}
+#searchWrap{padding:8px;flex:0 0 auto;border-bottom:1px solid var(--line);
+  display:flex;gap:6px;align-items:center;}
 #searchBox{
-  width:100%;padding:8px 10px;background:var(--panel2);color:var(--text);
+  flex:1 1 auto;min-width:0;padding:8px 10px;background:var(--panel2);color:var(--text);
   border:1px solid var(--line);border-radius:6px;font-family:inherit;
   font-size:14px;outline:none;
 }
 #searchBox:focus{border-color:var(--accent);}
+#btnSearchMode{
+  flex:0 0 auto;width:36px;height:36px;border-radius:6px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--text);
+  cursor:pointer;font-size:15px;padding:0;
+}
+#btnSearchMode.semantic{background:var(--btn);color:#fff;border-color:var(--btn);}
+#btnSearchMode:active{opacity:.85;}
+
 #noteList{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .noteItem{
   padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;
@@ -84,10 +93,32 @@ body{
 .noteTitle{font-size:14px;font-weight:500;color:var(--text);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .noteMeta{font-size:11px;color:var(--muted);margin-top:3px;
-  display:flex;align-items:center;gap:6px;}
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .noteLinkCount{font-size:10px;background:var(--panel2);padding:1px 5px;
   border-radius:8px;color:var(--muted);}
+.noteScore{font-size:10px;background:var(--panel2);padding:1px 5px;
+  border-radius:8px;color:var(--accent);}
 .emptyNote{padding:20px 12px;color:var(--muted);font-size:13px;text-align:center;}
+
+#embedFooter{
+  flex:0 0 auto;padding:7px 12px;
+  padding-bottom:calc(7px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--line);
+  font-size:11px;color:var(--muted);
+  display:flex;align-items:center;gap:7px;
+  cursor:pointer;user-select:none;-webkit-user-select:none;
+}
+#embedFooter:active{background:var(--hover);}
+#embedDot{
+  width:7px;height:7px;border-radius:50%;
+  background:var(--muted);flex:0 0 auto;
+  transition:background .2s;
+}
+#embedDot.loading{background:var(--warn);animation:pulse 1.2s infinite;}
+#embedDot.ready{background:var(--ok);}
+#embedDot.working{background:var(--warn);animation:pulse .9s infinite;}
+#embedDot.error{background:var(--err);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
 
 #editorPane{flex:1 1 auto;display:flex;flex-direction:column;
   min-height:0;min-width:0;background:var(--bg);}
@@ -240,6 +271,19 @@ body{
   font-size:12px;font-style:italic;text-align:center;max-width:92%;
   padding:4px 8px;
 }
+.msg-sources{
+  margin-top:8px;padding-top:6px;border-top:1px solid var(--line);
+  font-size:11px;color:var(--muted);
+  display:flex;flex-wrap:wrap;gap:4px;align-items:center;
+}
+.src-chip{
+  display:inline-block;padding:2px 8px;
+  border-radius:9px;background:var(--panel);
+  color:var(--accent);font-size:10px;
+  cursor:pointer;
+}
+.src-chip:active{background:var(--btn);color:#fff;}
+
 #chatProgress{
   display:none;padding:10px 12px;font-size:13px;color:var(--muted);
   border-bottom:1px solid var(--line);
@@ -343,8 +387,13 @@ body{
     <aside id="sidebar">
       <div id="searchWrap">
         <input id="searchBox" type="search" placeholder="Search notes..." autocomplete="off">
+        <button id="btnSearchMode" title="Search mode: keyword">🔍</button>
       </div>
       <div id="noteList"></div>
+      <div id="embedFooter" title="Tap to re-index all notes">
+        <span id="embedDot"></span>
+        <span id="embedStatusText">Search index ready</span>
+      </div>
     </aside>
     <section id="editorPane">
       <input id="titleInput" type="text" placeholder="Untitled" autocomplete="off">
@@ -381,7 +430,7 @@ body{
         <div class="quickChip" id="quickQuestions">Suggest follow-up questions</div>
       </div>
       <div id="chatInputBar">
-        <textarea id="chatInput" placeholder="Ask anything about this note..." rows="1"></textarea>
+        <textarea id="chatInput" placeholder="Ask anything about your notes..." rows="1"></textarea>
         <button id="btnSend" class="primaryBtn" disabled>Send</button>
       </div>
     </div>
@@ -397,12 +446,13 @@ body{
 "use strict";
 
 /* ============================================================
-   1. IndexedDB
+   1. IndexedDB  (v2: adds 'embeddings' store)
    ============================================================ */
 
 const DB_NAME = 'cortex-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE = 'notes';
+const STORE_EMB = 'embeddings';
 
 let dbPromise = null;
 function getDB(){
@@ -415,6 +465,9 @@ function getDB(){
           const s = d.createObjectStore(STORE, { keyPath: 'id' });
           s.createIndex('updated', 'updated');
         }
+        if (!d.objectStoreNames.contains(STORE_EMB)){
+          d.createObjectStore(STORE_EMB, { keyPath: 'id' });
+        }
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -422,6 +475,18 @@ function getDB(){
   }
   return dbPromise;
 }
+
+function txPromise(storeName, mode, fn){
+  return getDB().then(d => new Promise((resolve, reject) => {
+    const tx = d.transaction(storeName, mode);
+    const store = tx.objectStore(storeName);
+    const result = fn(store);
+    tx.oncomplete = () => resolve(result && result._v !== undefined ? result._v : result);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  }));
+}
+
 async function dbGetAll(){
   const d = await getDB();
   return new Promise((resolve, reject) => {
@@ -450,35 +515,52 @@ async function dbDelete(id){
   });
 }
 
+/* ---- embeddings store ---- */
+async function dbGetEmbedding(id){
+  const d = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = d.transaction(STORE_EMB, 'readonly');
+    const req = tx.objectStore(STORE_EMB).get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbPutEmbedding(rec){
+  const d = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = d.transaction(STORE_EMB, 'readwrite');
+    tx.objectStore(STORE_EMB).put(rec);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function dbDeleteEmbedding(id){
+  const d = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = d.transaction(STORE_EMB, 'readwrite');
+    tx.objectStore(STORE_EMB).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function dbGetAllEmbeddings(){
+  const d = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = d.transaction(STORE_EMB, 'readonly');
+    const req = tx.objectStore(STORE_EMB).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
 /* ============================================================
    2. Model catalog + device detection
    ============================================================ */
 
 const MODEL_CATALOG = {
-  tiny: {
-    id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
-    label: 'Tiny',
-    subtitle: 'Qwen 2.5 · 0.5B',
-    size: '~350 MB',
-    desc: 'Fastest. Answers are basic and can be repetitive.',
-    minMemory: 0,
-  },
-  small: {
-    id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',
-    label: 'Small',
-    subtitle: 'Llama 3.2 · 1B',
-    size: '~700 MB',
-    desc: 'Good balance of speed and quality. Works on most phones.',
-    minMemory: 4,
-  },
-  medium: {
-    id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
-    label: 'Medium',
-    subtitle: 'Llama 3.2 · 3B',
-    size: '~2 GB',
-    desc: 'Noticeably smarter. Slower. Needs 8+ GB RAM.',
-    minMemory: 8,
-  },
+  tiny:   { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',  label: 'Tiny',   subtitle: 'Qwen 2.5 · 0.5B', size: '~350 MB', desc: 'Fastest. Answers are basic and can be repetitive.', minMemory: 0 },
+  small:  { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',  label: 'Small',  subtitle: 'Llama 3.2 · 1B',  size: '~700 MB', desc: 'Good balance of speed and quality. Works on most phones.', minMemory: 4 },
+  medium: { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',  label: 'Medium', subtitle: 'Llama 3.2 · 3B',  size: '~2 GB',   desc: 'Noticeably smarter. Slower. Needs 8+ GB RAM.', minMemory: 8 },
 };
 
 function detectDevice(){
@@ -489,15 +571,9 @@ function detectDevice(){
     userAgent: navigator.userAgent,
   };
 }
-
 function recommendModel(specs){
-  if (!specs.webgpu){
-    return { tier: null, reason: 'WebGPU not available — AI features disabled.' };
-  }
-  if (specs.memory === null){
-    return { tier: 'small',
-             reason: 'Memory info unavailable — defaulting to Small (safe for most devices).' };
-  }
+  if (!specs.webgpu) return { tier: null, reason: 'WebGPU not available — AI features disabled.' };
+  if (specs.memory === null) return { tier: 'small', reason: 'Memory info unavailable — defaulting to Small.' };
   if (specs.memory >= 8) return { tier: 'medium', reason: '8+ GB RAM detected — Medium will run well.' };
   if (specs.memory >= 4) return { tier: 'small',  reason: '4–8 GB RAM detected — Small is the sweet spot.' };
   return { tier: 'tiny', reason: 'Under 4 GB RAM detected — Tiny for stability.' };
@@ -508,22 +584,15 @@ const RECOMMEND = recommendModel(DEVICE);
 
 const STORE_MODEL_TIER = 'cortex.model.tier.v1';
 function loadSavedTier(){
-  try {
-    const t = localStorage.getItem(STORE_MODEL_TIER);
-    if (t && MODEL_CATALOG[t]) return t;
-  } catch(e){}
+  try { const t = localStorage.getItem(STORE_MODEL_TIER); if (t && MODEL_CATALOG[t]) return t; } catch(e){}
   return RECOMMEND.tier || 'small';
 }
-function saveTier(tier){
-  try { localStorage.setItem(STORE_MODEL_TIER, tier); } catch(e){}
-}
+function saveTier(tier){ try { localStorage.setItem(STORE_MODEL_TIER, tier); } catch(e){} }
 
 let CURRENT_TIER = loadSavedTier();
 let MODEL_ID = MODEL_CATALOG[CURRENT_TIER].id;
 
-console.log('[Cortex] Device:', DEVICE);
-console.log('[Cortex] Recommendation:', RECOMMEND);
-console.log('[Cortex] Selected tier:', CURRENT_TIER, '->', MODEL_ID);
+console.log('[Cortex] Device:', DEVICE, 'Recommend:', RECOMMEND, 'Tier:', CURRENT_TIER);
 
 /* ============================================================
    3. State
@@ -539,6 +608,10 @@ let llmEngine = null;
 let llmLoadingPromise = null;
 let llmGeneration = 0;
 
+let searchMode = 'keyword';   // 'keyword' | 'semantic'
+let semanticResults = [];     // [{ note, score }]
+let semanticQuery = '';
+
 /* ============================================================
    4. DOM
    ============================================================ */
@@ -548,10 +621,14 @@ const preview      = document.getElementById('preview');
 const titleInput   = document.getElementById('titleInput');
 const noteList     = document.getElementById('noteList');
 const searchBox    = document.getElementById('searchBox');
+const btnSearchMode= document.getElementById('btnSearchMode');
 const sidebar      = document.getElementById('sidebar');
 const scrim        = document.getElementById('scrim');
 const linkSuggest  = document.getElementById('linkSuggest');
 const backlinksBar = document.getElementById('backlinksBar');
+const embedFooter  = document.getElementById('embedFooter');
+const embedDot     = document.getElementById('embedDot');
+const embedStatusText = document.getElementById('embedStatusText');
 
 const chatSheet    = document.getElementById('chatSheet');
 const chatScrim    = document.getElementById('chatScrim');
@@ -581,9 +658,8 @@ function formatTime(ts){
   if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
   return new Date(ts).toLocaleDateString();
 }
-function activeNote(){
-  return notes.find(n => n.id === activeId) || null;
-}
+function activeNote(){ return notes.find(n => n.id === activeId) || null; }
+
 function escapeHTML(s){
   return String(s).replace(/[&<>"']/g, c =>
     c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' :
@@ -597,6 +673,19 @@ function sanitizeHTML(html){
   html = html.replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"');
   html = html.replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'");
   return html;
+}
+function simpleHash(s){
+  let h = 5381;
+  for (let i = 0; i < s.length; i++){
+    h = ((h << 5) + h) ^ s.charCodeAt(i);
+  }
+  return h >>> 0;
+}
+function dot(a, b){
+  let s = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) s += a[i] * b[i];
+  return s;
 }
 
 /* ============================================================
@@ -650,58 +739,327 @@ function styleWikiLinks(){
 }
 
 /* ============================================================
-   7. Sidebar
+   7. Embeddings (transformers.js)
+   ============================================================ */
+
+const EMBED_MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
+
+let embedder = null;
+let embedderLoading = null;
+let embedStatus = 'idle';        // 'idle' | 'loading' | 'ready' | 'working' | 'error'
+let embedProgressText = '';
+const embedTimers = new Map();   // noteId -> timeout
+const embedPending = new Set();  // noteIds currently being embedded
+
+function updateEmbedStatusUI(){
+  let cls = '', text = '';
+  const total = notes.length;
+  const indexed = window.__indexedCount || 0;
+
+  if (embedStatus === 'idle'){
+    text = 'Search index: idle';
+  } else if (embedStatus === 'loading'){
+    cls = 'loading';
+    text = embedProgressText || 'Loading embedder...';
+  } else if (embedStatus === 'ready'){
+    cls = 'ready';
+    text = indexed >= total
+      ? 'Search index: ' + indexed + '/' + total
+      : 'Search index: ' + indexed + '/' + total;
+  } else if (embedStatus === 'working'){
+    cls = 'working';
+    text = embedPending.size > 0
+      ? 'Embedding ' + embedPending.size + ' note' + (embedPending.size === 1 ? '' : 's') + '...'
+      : 'Embedding...';
+  } else if (embedStatus === 'error'){
+    cls = 'error';
+    text = 'Search index error';
+  }
+  embedDot.className = cls;
+  embedStatusText.textContent = text;
+}
+
+async function refreshEmbedCount(){
+  try {
+    const all = await dbGetAllEmbeddings();
+    window.__indexedCount = all.length;
+  } catch(e){
+    window.__indexedCount = 0;
+  }
+  updateEmbedStatusUI();
+}
+
+async function loadEmbedder(){
+  if (embedder) return embedder;
+  if (embedderLoading) return embedderLoading;
+
+  embedStatus = 'loading';
+  embedProgressText = 'Loading embedder...';
+  updateEmbedStatusUI();
+
+  embedderLoading = (async () => {
+    try {
+      const tf = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/+esm');
+      tf.env.allowLocalModels = false;
+      tf.env.useBrowserCache = true;
+
+      const pipe = await tf.pipeline('feature-extraction', EMBED_MODEL_ID, {
+        progress_callback: (info) => {
+          if (info && info.status === 'progress' && info.total){
+            const pct = Math.round((info.loaded / info.total) * 100);
+            embedProgressText = 'Downloading embedder ' + pct + '%';
+            updateEmbedStatusUI();
+          } else if (info && info.status === 'ready'){
+            embedProgressText = 'Embedder ready';
+            updateEmbedStatusUI();
+          }
+        },
+      });
+
+      embedder = pipe;
+      embedStatus = 'ready';
+      embedProgressText = '';
+      updateEmbedStatusUI();
+      return pipe;
+    } catch(err){
+      embedStatus = 'error';
+      embedProgressText = '';
+      updateEmbedStatusUI();
+      embedderLoading = null;
+      throw err;
+    }
+  })();
+
+  return embedderLoading;
+}
+
+async function embedText(text){
+  const pipe = await loadEmbedder();
+  const out = await pipe(text, { pooling: 'mean', normalize: true });
+  return new Float32Array(out.data);
+}
+
+async function runEmbed(noteId, force){
+  const note = notes.find(n => n.id === noteId);
+  if (!note) return;
+  const body = note.body || '';
+  if (!body.trim()){
+    try { await dbDeleteEmbedding(noteId); } catch(e){}
+    return;
+  }
+  const hash = simpleHash(body);
+
+  if (!force){
+    try {
+      const existing = await dbGetEmbedding(noteId);
+      if (existing && existing.hash === hash) return;
+    } catch(e){}
+  }
+
+  embedPending.add(noteId);
+  embedStatus = 'working';
+  updateEmbedStatusUI();
+
+  try {
+    const vec = await embedText(body);
+    await dbPutEmbedding({
+      id: noteId,
+      vector: vec,
+      hash: hash,
+      updated: Date.now(),
+    });
+    await refreshEmbedCount();
+  } catch(err){
+    console.warn('[Cortex] embed failed:', noteId, err);
+    embedStatus = 'error';
+  } finally {
+    embedPending.delete(noteId);
+    if (embedPending.size === 0 && embedStatus === 'working'){
+      embedStatus = 'ready';
+    }
+    updateEmbedStatusUI();
+  }
+}
+
+function scheduleEmbed(noteId){
+  if (!noteId) return;
+  const prev = embedTimers.get(noteId);
+  if (prev) clearTimeout(prev);
+  const t = setTimeout(() => {
+    embedTimers.delete(noteId);
+    runEmbed(noteId).catch(() => {});
+  }, 5000);
+  embedTimers.set(noteId, t);
+}
+
+async function embedSweep(){
+  await refreshEmbedCount();
+  const all = await dbGetAllEmbeddings();
+  const map = new Map(all.map(e => [e.id, e]));
+  for (const note of notes){
+    const cur = map.get(note.id);
+    const h = simpleHash(note.body || '');
+    if (!cur || cur.hash !== h){
+      scheduleEmbed(note.id);
+    }
+  }
+}
+
+async function reindexAll(){
+  try {
+    await loadEmbedder();
+    for (const note of notes){
+      await runEmbed(note.id, true);
+    }
+  } catch(e){
+    console.warn('reindex failed:', e);
+  }
+}
+
+async function semanticSearch(query, limit){
+  limit = limit || 10;
+  if (!query || !query.trim()) return [];
+  const qVec = await embedText(query);
+  const all = await dbGetAllEmbeddings();
+  const scored = [];
+  for (const rec of all){
+    const note = notes.find(n => n.id === rec.id);
+    if (!note) continue;
+    if (!rec.vector) continue;
+    const score = dot(qVec, rec.vector);
+    scored.push({ note: note, score: score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit);
+}
+
+/* ============================================================
+   8. Sidebar
    ============================================================ */
 
 function renderNoteList(){
-  const q = searchBox.value.trim().toLowerCase();
-  const sorted = [...notes].sort((a, b) => b.updated - a.updated);
-  const filtered = q
-    ? sorted.filter(n =>
-        (n.title || '').toLowerCase().includes(q) ||
-        (n.body  || '').toLowerCase().includes(q))
-    : sorted;
+  const q = searchBox.value.trim();
+
+  let items = [];   // [{ note, score? }]
+
+  if (searchMode === 'semantic' && q){
+    if (q !== semanticQuery) return;   // waiting for search
+    items = semanticResults.map(r => ({ note: r.note, score: r.score }));
+  } else if (searchMode === 'semantic'){
+    items = [...notes].sort((a, b) => b.updated - a.updated).map(n => ({ note: n }));
+  } else {
+    const lq = q.toLowerCase();
+    const sorted = [...notes].sort((a, b) => b.updated - a.updated);
+    const filtered = lq
+      ? sorted.filter(n =>
+          (n.title || '').toLowerCase().includes(lq) ||
+          (n.body  || '').toLowerCase().includes(lq))
+      : sorted;
+    items = filtered.map(n => ({ note: n }));
+  }
 
   noteList.textContent = '';
-  for (const n of filtered){
+
+  for (const { note, score } of items){
     const item = document.createElement('div');
-    item.className = 'noteItem' + (n.id === activeId ? ' active' : '');
+    item.className = 'noteItem' + (note.id === activeId ? ' active' : '');
 
     const title = document.createElement('div');
     title.className = 'noteTitle';
-    title.textContent = n.title || 'Untitled';
+    title.textContent = note.title || 'Untitled';
 
     const meta = document.createElement('div');
     meta.className = 'noteMeta';
+
     const time = document.createElement('span');
-    time.textContent = formatTime(n.updated);
+    time.textContent = formatTime(note.updated);
     meta.appendChild(time);
 
-    const bl = findBacklinks(n.id);
+    const bl = findBacklinks(note.id);
     if (bl.length){
       const badge = document.createElement('span');
       badge.className = 'noteLinkCount';
       badge.textContent = '← ' + bl.length;
       meta.appendChild(badge);
     }
+    if (typeof score === 'number' && searchMode === 'semantic' && q){
+      const sb = document.createElement('span');
+      sb.className = 'noteScore';
+      sb.textContent = Math.round(score * 100) + '%';
+      meta.appendChild(sb);
+    }
 
     item.appendChild(title);
     item.appendChild(meta);
-    item.addEventListener('click', () => switchNote(n.id));
+    item.addEventListener('click', () => switchNote(note.id));
     noteList.appendChild(item);
   }
-  if (!filtered.length){
+
+  if (!items.length){
     const empty = document.createElement('div');
     empty.className = 'emptyNote';
-    empty.textContent = q ? 'No notes match your search.' : 'No notes yet. Tap + New to create one.';
+    if (q && searchMode === 'semantic'){
+      empty.textContent = 'No results yet. Try a different phrase.';
+    } else if (q){
+      empty.textContent = 'No notes match your search.';
+    } else {
+      empty.textContent = 'No notes yet. Tap + New to create one.';
+    }
     noteList.appendChild(empty);
   }
 }
+
+let semanticDebounce = null;
+async function runSemanticQuery(){
+  const q = searchBox.value.trim();
+  if (!q){
+    semanticQuery = '';
+    semanticResults = [];
+    renderNoteList();
+    return;
+  }
+  if (embedStatus === 'error'){
+    return;
+  }
+  if (embedStatus !== 'ready' && embedStatus !== 'working'){
+    embedStatusText.textContent = 'Loading embedder...';
+    return;
+  }
+  try {
+    embedPending.size = embedPending.size;   // no-op, keeps UI stable
+    const results = await semanticSearch(q, 30);
+    semanticQuery = q;
+    semanticResults = results;
+    renderNoteList();
+  } catch(e){
+    console.warn('semantic search failed:', e);
+  }
+}
+
+function toggleSearchMode(){
+  if (searchMode === 'keyword'){
+    searchMode = 'semantic';
+    btnSearchMode.textContent = '🧠';
+    btnSearchMode.classList.add('semantic');
+    btnSearchMode.title = 'Search mode: semantic';
+    // Kick off a query if there's text
+    if (searchBox.value.trim()) runSemanticQuery();
+  } else {
+    searchMode = 'keyword';
+    btnSearchMode.textContent = '🔍';
+    btnSearchMode.classList.remove('semantic');
+    btnSearchMode.title = 'Search mode: keyword';
+    semanticResults = [];
+    semanticQuery = '';
+    renderNoteList();
+  }
+}
+
 function openSidebar(){ sidebar.classList.add('open'); scrim.classList.add('show'); }
 function closeSidebar(){ sidebar.classList.remove('open'); scrim.classList.remove('show'); }
 
 /* ============================================================
-   8. Backlinks
+   9. Backlinks
    ============================================================ */
 
 function findBacklinks(noteId){
@@ -717,7 +1075,6 @@ function findBacklinks(noteId){
   }
   return out.sort((a, b) => b.updated - a.updated);
 }
-
 function renderBacklinks(){
   const n = activeNote();
   if (!n){ backlinksBar.style.display = 'none'; return; }
@@ -739,7 +1096,7 @@ function renderBacklinks(){
 }
 
 /* ============================================================
-   9. Note CRUD
+   10. Note CRUD
    ============================================================ */
 
 async function saveNote(){
@@ -758,6 +1115,8 @@ function scheduleSave(){
     renderNoteList();
     renderBacklinks();
     if (view === 'preview') updatePreview();
+    // Eager embedding: 5 seconds after the last edit
+    if (activeId) scheduleEmbed(activeId);
   }, 400);
 }
 async function switchNote(id){
@@ -802,7 +1161,9 @@ async function deleteActiveNote(){
   const label = n.title && n.title !== 'Untitled' ? '"' + n.title + '"' : 'this note';
   if (!confirm('Delete ' + label + '? This cannot be undone.')) return;
   try { await dbDelete(n.id); } catch(e){}
+  try { await dbDeleteEmbedding(n.id); } catch(e){}
   notes = notes.filter(x => x.id !== n.id);
+  await refreshEmbedCount();
   if (!notes.length){ await createNote(); return; }
   const next = [...notes].sort((a, b) => b.updated - a.updated)[0];
   activeId = next.id;
@@ -815,7 +1176,7 @@ async function deleteActiveNote(){
 }
 
 /* ============================================================
-   10. Wiki link navigation + autocomplete
+   11. Wiki link navigation + autocomplete
    ============================================================ */
 
 async function navigateToWikiLink(target){
@@ -852,7 +1213,6 @@ function renderLinkSuggest(){
       return b.updated - a.updated;
     })
     .slice(0, 10);
-
   linkSuggest.textContent = '';
   for (const n of matches){
     const title = n.title || 'Untitled';
@@ -887,7 +1247,7 @@ function insertLinkSuggestion(ctx, title){
 }
 
 /* ============================================================
-   11. Preview
+   12. Preview
    ============================================================ */
 
 if (window.marked && window.marked.use){
@@ -932,7 +1292,7 @@ preview.addEventListener('click', (e) => {
 });
 
 /* ============================================================
-   12. Model picker modal
+   13. Model picker modal
    ============================================================ */
 
 function setModelState(state, label){
@@ -941,21 +1301,12 @@ function setModelState(state, label){
   el.className = 'statePill' + (state ? ' ' + state : '');
   el.textContent = label || state || 'idle';
 }
-
-function openModelModal(){
-  renderModelOptions();
-  modelModal.classList.add('open');
-}
-function closeModelModal(){
-  modelModal.classList.remove('open');
-}
-modelModal.addEventListener('click', (e) => {
-  if (e.target === modelModal) closeModelModal();
-});
+function openModelModal(){ renderModelOptions(); modelModal.classList.add('open'); }
+function closeModelModal(){ modelModal.classList.remove('open'); }
+modelModal.addEventListener('click', (e) => { if (e.target === modelModal) closeModelModal(); });
 
 function renderModelOptions(){
   modelCard.textContent = '';
-
   const head = document.createElement('div');
   head.className = 'mHead';
   head.textContent = 'Choose a model';
@@ -965,16 +1316,11 @@ function renderModelOptions(){
     const m = MODEL_CATALOG[tier];
     const isCurrent = (tier === CURRENT_TIER);
     const isRec = (tier === RECOMMEND.tier);
-
     const item = document.createElement('div');
     item.className = 'mItem' + (isCurrent ? ' current' : '');
-    if (DEVICE.memory !== null && m.minMemory > DEVICE.memory){
-      item.classList.add('disabled');
-    }
-
+    if (DEVICE.memory !== null && m.minMemory > DEVICE.memory) item.classList.add('disabled');
     const main = document.createElement('div');
     main.className = 'mMain';
-
     const label = document.createElement('div');
     label.className = 'mLabel';
     label.textContent = m.label + ' — ' + m.subtitle;
@@ -982,28 +1328,17 @@ function renderModelOptions(){
     sizeSpan.className = 'mSize';
     sizeSpan.textContent = m.size;
     label.appendChild(sizeSpan);
-
     if (isCurrent){
-      const b = document.createElement('span');
-      b.className = 'mBadge';
-      b.textContent = 'Current';
-      label.appendChild(b);
+      const b = document.createElement('span'); b.className = 'mBadge'; b.textContent = 'Current'; label.appendChild(b);
     }
     if (isRec){
-      const b = document.createElement('span');
-      b.className = 'mBadge rec';
-      b.textContent = 'Recommended';
-      label.appendChild(b);
+      const b = document.createElement('span'); b.className = 'mBadge rec'; b.textContent = 'Recommended'; label.appendChild(b);
     }
-
     const desc = document.createElement('div');
     desc.className = 'mDesc';
     desc.textContent = m.desc;
-
-    main.appendChild(label);
-    main.appendChild(desc);
+    main.appendChild(label); main.appendChild(desc);
     item.appendChild(main);
-
     item.addEventListener('click', () => {
       if (item.classList.contains('disabled')){
         alert('This model needs more RAM than your device reports.');
@@ -1011,7 +1346,6 @@ function renderModelOptions(){
       }
       selectModel(tier);
     });
-
     modelCard.appendChild(item);
   }
 
@@ -1038,8 +1372,7 @@ function renderModelOptions(){
   const memDesc = document.createElement('div');
   memDesc.className = 'mDesc';
   memDesc.textContent = 'Show current model state, JS heap usage, and cache hints.';
-  memMain.appendChild(memLabel);
-  memMain.appendChild(memDesc);
+  memMain.appendChild(memLabel); memMain.appendChild(memDesc);
   memBtn.appendChild(memMain);
   memBtn.addEventListener('click', () => { closeModelModal(); showMemoryInfo(); });
   modelCard.appendChild(memBtn);
@@ -1047,27 +1380,18 @@ function renderModelOptions(){
 
 async function selectModel(tier){
   if (!MODEL_CATALOG[tier]) return;
-
-  if (tier === CURRENT_TIER && llmEngine){
-    closeModelModal();
-    return;
-  }
-
+  if (tier === CURRENT_TIER && llmEngine){ closeModelModal(); return; }
   const label = MODEL_CATALOG[tier].label;
   const confirmed = confirm(
     'Switch to ' + label + '?\n\n' +
-    'If the model is not yet cached, this will download ' +
-    MODEL_CATALOG[tier].size + '.'
+    'If the model is not yet cached, this will download ' + MODEL_CATALOG[tier].size + '.'
   );
   if (!confirmed) return;
-
   closeModelModal();
-
   CURRENT_TIER = tier;
   MODEL_ID = MODEL_CATALOG[tier].id;
   saveTier(tier);
   console.log('[Cortex] Switched to tier:', tier, '->', MODEL_ID);
-
   await unloadModel();
   chatMessages.textContent = '';
   appendMessage('system', 'Loading ' + label + ' (' + MODEL_CATALOG[tier].size + ')...');
@@ -1075,15 +1399,13 @@ async function selectModel(tier){
 }
 
 /* ============================================================
-   13. Chat — WebLLM
+   14. Chat — WebLLM + RAG
    ============================================================ */
 
 function openChat(){
   chatSheet.classList.add('open');
   chatScrim.classList.add('show');
-  if (!llmEngine && !llmLoadingPromise){
-    startEngineLoad();
-  }
+  if (!llmEngine && !llmLoadingPromise) startEngineLoad();
   setTimeout(() => chatInput.focus(), 250);
 }
 function closeChat(){
@@ -1109,6 +1431,23 @@ function appendMessage(role, text){
   return el;
 }
 
+function attachSources(msgEl, sources){
+  if (!sources || !sources.length) return;
+  const src = document.createElement('div');
+  src.className = 'msg-sources';
+  const lbl = document.createElement('span');
+  lbl.textContent = 'Sources:';
+  src.appendChild(lbl);
+  for (const s of sources){
+    const chip = document.createElement('span');
+    chip.className = 'src-chip';
+    chip.textContent = s.title || 'Untitled';
+    chip.addEventListener('click', () => switchNote(s.id));
+    src.appendChild(chip);
+  }
+  msgEl.appendChild(src);
+}
+
 function showChatProgress(text, fraction){
   chatProgress.style.display = 'block';
   chatProgressText.textContent = text || 'Loading...';
@@ -1124,69 +1463,46 @@ function hideChatProgress(){
 async function startEngineLoad(){
   if (llmEngine) return llmEngine;
   if (llmLoadingPromise) return llmLoadingPromise;
-
   if (!('gpu' in navigator)){
     setModelState('error', 'no gpu');
-    appendMessage('system',
-      'WebGPU is not available in this browser. Update Chrome to the latest version, then reopen.');
+    appendMessage('system', 'WebGPU is not available in this browser.');
     chatInput.disabled = true;
     btnSend.disabled = true;
     return null;
   }
-
   const tierInfo = MODEL_CATALOG[CURRENT_TIER];
   const deviceEl = document.getElementById('chatProgressDevice');
   if (deviceEl){
     deviceEl.textContent = DEVICE.memory !== null
-      ? 'Detected: ' + DEVICE.memory + ' GB RAM, ' + (DEVICE.cores || '?') +
-        ' cores. Loading ' + tierInfo.label + ' (' + tierInfo.size + ').'
+      ? 'Detected: ' + DEVICE.memory + ' GB RAM, ' + (DEVICE.cores || '?') + ' cores. Loading ' + tierInfo.label + ' (' + tierInfo.size + ').'
       : 'Device memory not exposed. Loading ' + tierInfo.label + ' (' + tierInfo.size + ').';
   }
-
   setModelState('loading', 'loading');
   showChatProgress('Downloading model (' + tierInfo.size + '). This happens once.', 0);
-
   const myGen = ++llmGeneration;
-
   llmLoadingPromise = (async () => {
     try {
       const webllm = await import('https://esm.run/@mlc-ai/web-llm@0.2.78');
-
       if (!webllm || typeof webllm.CreateMLCEngine !== 'function'){
-        const keys = webllm ? Object.keys(webllm).join(', ') : 'null';
-        throw new Error('WebLLM loaded but CreateMLCEngine missing. Keys: ' + keys);
+        throw new Error('WebLLM loaded but CreateMLCEngine missing.');
       }
-
-      const baseList = (webllm.prebuiltAppConfig && webllm.prebuiltAppConfig.model_list)
-        ? webllm.prebuiltAppConfig.model_list
-        : [];
-      if (!baseList.length){
-        throw new Error('WebLLM shipped with an empty model list through this CDN.');
-      }
-
+      const baseList = (webllm.prebuiltAppConfig && webllm.prebuiltAppConfig.model_list) || [];
+      if (!baseList.length) throw new Error('Empty model list.');
       const engine = await webllm.CreateMLCEngine(MODEL_ID, {
-        appConfig: {
-          model_list: baseList,
-          useIndexedDBCache: true,
-        },
+        appConfig: { model_list: baseList, useIndexedDBCache: true },
         initProgressCallback: (report) => {
           if (myGen !== llmGeneration) return;
           const text = report && report.text ? report.text : 'Loading...';
           showChatProgress(text, report && report.progress);
         },
       });
-
-      if (myGen !== llmGeneration){
-        try { await engine.unload(); } catch(e){}
-        return null;
-      }
-
+      if (myGen !== llmGeneration){ try { await engine.unload(); } catch(e){} return null; }
       llmEngine = engine;
       hideChatProgress();
       chatInput.disabled = false;
       btnSend.disabled = false;
       setModelState('ready', 'ready');
-      appendMessage('system', tierInfo.label + ' model ready. Ask anything about this note.');
+      appendMessage('system', tierInfo.label + ' model ready. Ask anything about your notes.');
       return engine;
     } catch(err){
       if (myGen !== llmGeneration) return null;
@@ -1201,20 +1517,13 @@ async function startEngineLoad(){
       return null;
     }
   })();
-
   return llmLoadingPromise;
 }
 
 async function unloadModel(){
   llmGeneration++;
   const wasReady = !!llmEngine;
-  try {
-    if (llmEngine && typeof llmEngine.unload === 'function'){
-      await llmEngine.unload();
-    }
-  } catch(e){
-    console.warn('unload failed:', e);
-  }
+  try { if (llmEngine && typeof llmEngine.unload === 'function') await llmEngine.unload(); } catch(e){}
   llmEngine = null;
   llmLoadingPromise = null;
   chatHistory = [];
@@ -1228,46 +1537,76 @@ async function unloadModel(){
 
 function showMemoryInfo(){
   const used = (typeof performance !== 'undefined' && performance.memory)
-    ? (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1) + ' MB'
-    : 'not available';
+    ? (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1) + ' MB' : 'not available';
   const limit = (typeof performance !== 'undefined' && performance.memory)
-    ? (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(0) + ' MB'
-    : 'n/a';
+    ? (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(0) + ' MB' : 'n/a';
   const dev = navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'not exposed';
   const cores = navigator.hardwareConcurrency || 'unknown';
   const state = llmEngine ? 'LOADED' : 'not loaded';
-
+  const emb = embedStatus + ' (' + (window.__indexedCount || 0) + ' notes indexed)';
   alert(
     'Model state: ' + state + '\n' +
     'Current tier: ' + CURRENT_TIER + '\n' +
     'Model ID: ' + MODEL_ID + '\n' +
+    'Embedder: ' + emb + '\n' +
     'JS heap used: ' + used + ' / ' + limit + '\n' +
     'Device memory (rounded): ' + dev + '\n' +
     'CPU cores: ' + cores + '\n\n' +
-    'The model lives in GPU memory, not JS heap.\n' +
-    'For real GPU memory stats, visit chrome://gpu'
+    'The model lives in GPU memory, not JS heap.'
   );
 }
 
-function buildMessages(){
+async function retrieveContext(question, k){
+  k = k || 3;
+  if (embedStatus !== 'ready' && embedStatus !== 'working') return [];
+  if (!question) return [];
+  try {
+    const results = await semanticSearch(question, k + 2);
+    return results
+      .filter(r => r.note.id !== activeId && r.score > 0.20)
+      .slice(0, k);
+  } catch(e){
+    return [];
+  }
+}
+
+async function buildMessages(){
   const msgs = [];
   const note = activeNote();
 
-  let system = 'You are Cortex, a helpful AI assistant built into a note-taking app. Answer concisely and helpfully.';
+  let system =
+    'You are Cortex, a helpful AI assistant built into a local note-taking app. ' +
+    'Answer concisely and helpfully. When you use information from a retrieved note, ' +
+    'mention the note title naturally in your answer.';
+
   if (note){
     const title = note.title || 'Untitled';
     const body = (note.body || '').trim();
     system +=
       '\n\nThe user is currently viewing a note titled "' + title + '". Here is its full content:\n\n' +
-      '---\n' + (body || '(empty note)') + '\n---\n\n' +
-      'Answer questions about this note. If they ask something unrelated, still help, but keep it brief.';
+      '---\n' + (body || '(empty note)') + '\n---';
+  }
+
+  const lastUser = [...chatHistory].reverse().find(m => m.role === 'user');
+  let sources = [];
+  if (lastUser){
+    const hits = await retrieveContext(lastUser.content, 3);
+    if (hits.length){
+      sources = hits.map(h => h.note);
+      system += '\n\nHere are OTHER notes from the user\'s collection that may be relevant ' +
+                '(retrieved by semantic similarity):\n\n';
+      for (const h of hits){
+        const t = h.note.title || 'Untitled';
+        const b = (h.note.body || '').slice(0, 900);
+        system += '### ' + t + '\n' + b + '\n\n';
+      }
+      system += 'Use these when helpful.';
+    }
   }
 
   msgs.push({ role: 'system', content: system });
-  for (const m of chatHistory){
-    msgs.push({ role: m.role, content: m.content });
-  }
-  return msgs;
+  for (const m of chatHistory) msgs.push({ role: m.role, content: m.content });
+  return { messages: msgs, sources: sources };
 }
 
 async function sendMessage(text){
@@ -1281,11 +1620,7 @@ async function sendMessage(text){
     chatHistory.push({ role: 'user', content: text });
     appendMessage('user', text);
     await startEngineLoad();
-    if (!llmEngine){
-      chatInput.disabled = true;
-      btnSend.disabled = true;
-      return;
-    }
+    if (!llmEngine){ chatInput.disabled = true; btnSend.disabled = true; return; }
   } else {
     chatHistory.push({ role: 'user', content: text });
     appendMessage('user', text);
@@ -1300,8 +1635,9 @@ async function sendMessage(text){
   const assistantEl = appendMessage('assistant', '...');
 
   try {
+    const { messages, sources } = await buildMessages();
     const chunks = await llmEngine.chat.completions.create({
-      messages: buildMessages(),
+      messages: messages,
       temperature: 0.7,
       stream: true,
     });
@@ -1322,18 +1658,15 @@ async function sendMessage(text){
 
     for await (const chunk of chunks){
       const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta
-        ? (chunk.choices[0].delta.content || '')
-        : '';
+        ? (chunk.choices[0].delta.content || '') : '';
       if (!delta) continue;
       full += delta;
       pending += delta;
-      if (!rafScheduled){
-        rafScheduled = true;
-        requestAnimationFrame(flush);
-      }
+      if (!rafScheduled){ rafScheduled = true; requestAnimationFrame(flush); }
     }
     flush();
     if (!started) assistantEl.textContent = '(no response)';
+    if (sources.length) attachSources(assistantEl, sources);
     chatHistory.push({ role: 'assistant', content: full });
   } catch(err){
     assistantEl.textContent = 'Error: ' + (err && err.message ? err.message : err);
@@ -1348,10 +1681,7 @@ async function sendMessage(text){
 
 btnSend.addEventListener('click', () => sendMessage(chatInput.value));
 chatInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey){
-    e.preventDefault();
-    sendMessage(chatInput.value);
-  }
+  if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(chatInput.value); }
 });
 chatInput.addEventListener('input', () => {
   chatInput.style.height = 'auto';
@@ -1359,25 +1689,20 @@ chatInput.addEventListener('input', () => {
 });
 
 document.getElementById('btnChat').addEventListener('click', () => {
-  if (chatSheet.classList.contains('open')) closeChat();
-  else openChat();
+  if (chatSheet.classList.contains('open')) closeChat(); else openChat();
 });
-
 document.getElementById('quickSummarize').addEventListener('click', () => {
-  chatInput.value = 'Summarize this note in 3 sentences.';
-  chatInput.focus();
+  chatInput.value = 'Summarize this note in 3 sentences.'; chatInput.focus();
 });
 document.getElementById('quickExplain').addEventListener('click', () => {
-  chatInput.value = 'Explain the key ideas in this note in simple terms.';
-  chatInput.focus();
+  chatInput.value = 'Explain the key ideas in this note in simple terms.'; chatInput.focus();
 });
 document.getElementById('quickQuestions').addEventListener('click', () => {
-  chatInput.value = 'Suggest 5 follow-up questions I should investigate based on this note.';
-  chatInput.focus();
+  chatInput.value = 'Suggest 5 follow-up questions I should investigate based on this note.'; chatInput.focus();
 });
 
 /* ============================================================
-   14. Events
+   15. Events
    ============================================================ */
 
 editor.addEventListener('input', () => {
@@ -1386,26 +1711,39 @@ editor.addEventListener('input', () => {
   if (view === 'preview') updatePreview();
 });
 titleInput.addEventListener('input', scheduleSave);
-searchBox.addEventListener('input', renderNoteList);
-searchBox.addEventListener('search', renderNoteList);
+
+searchBox.addEventListener('input', () => {
+  if (searchMode === 'semantic'){
+    clearTimeout(semanticDebounce);
+    semanticDebounce = setTimeout(runSemanticQuery, 350);
+  } else {
+    renderNoteList();
+  }
+});
+searchBox.addEventListener('search', () => {
+  if (searchMode === 'semantic') runSemanticQuery();
+  else renderNoteList();
+});
+btnSearchMode.addEventListener('click', toggleSearchMode);
+
+embedFooter.addEventListener('click', () => {
+  if (confirm('Re-index all notes? This recomputes embeddings for every note.')){
+    reindexAll();
+  }
+});
 
 document.getElementById('btnNew').addEventListener('click', () => createNote());
 document.getElementById('btnPreview').addEventListener('click', () => {
   setView(view === 'edit' ? 'preview' : 'edit');
 });
 document.getElementById('btnSidebar').addEventListener('click', () => {
-  if (sidebar.classList.contains('open')) closeSidebar();
-  else openSidebar();
+  if (sidebar.classList.contains('open')) closeSidebar(); else openSidebar();
 });
 scrim.addEventListener('click', closeSidebar);
 
 editor.addEventListener('keydown', (e) => {
   if (e.key === 'Escape'){
-    if (linkSuggest.style.display !== 'none'){
-      e.preventDefault();
-      linkSuggest.style.display = 'none';
-      return;
-    }
+    if (linkSuggest.style.display !== 'none'){ e.preventDefault(); linkSuggest.style.display = 'none'; return; }
   }
   if ((e.ctrlKey || e.metaKey) && e.key === 'l'){
     e.preventDefault();
@@ -1417,14 +1755,10 @@ editor.addEventListener('keydown', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'n'){ e.preventDefault(); createNote(); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'e'){
-    e.preventDefault();
-    setView(view === 'edit' ? 'preview' : 'edit');
-  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'e'){ e.preventDefault(); setView(view === 'edit' ? 'preview' : 'edit'); }
   if ((e.ctrlKey || e.metaKey) && e.key === 'k'){
     e.preventDefault();
-    if (chatSheet.classList.contains('open')) closeChat();
-    else openChat();
+    if (chatSheet.classList.contains('open')) closeChat(); else openChat();
   }
   if (e.key === 'Escape'){
     closeSidebar();
@@ -1440,15 +1774,11 @@ document.addEventListener('keydown', (e) => {
 
 window.addEventListener('beforeunload', () => {
   const n = activeNote();
-  if (n){
-    n.title = titleInput.value.trim() || 'Untitled';
-    n.body = editor.value;
-    n.updated = Date.now();
-  }
+  if (n){ n.title = titleInput.value.trim() || 'Untitled'; n.body = editor.value; n.updated = Date.now(); }
 });
 
 /* ============================================================
-   15. Viewport
+   16. Viewport
    ============================================================ */
 
 function updateViewport(){
@@ -1459,15 +1789,13 @@ function updateViewport(){
 }
 if (window.visualViewport){
   window.visualViewport.addEventListener('resize', updateViewport);
-  window.visualViewport.addEventListener('scroll', () => {
-    updateViewport(); window.scrollTo(0, 0);
-  });
+  window.visualViewport.addEventListener('scroll', () => { updateViewport(); window.scrollTo(0, 0); });
 }
 window.addEventListener('orientationchange', () => setTimeout(updateViewport, 250));
 updateViewport();
 
 /* ============================================================
-   16. Init
+   17. Init
    ============================================================ */
 
 async function init(){
@@ -1480,27 +1808,27 @@ async function init(){
       body:
         '# Welcome to Cortex\n\n' +
         'This is a note. It links to another note: [[How wiki links work]].\n\n' +
-        'Tap **Preview** (or press Ctrl+E) to see the link render. Then tap the sparkle icon in the top bar to ask the AI about this note.\n\n' +
+        'Tap **Preview** to see the link render. Tap the sparkle icon to ask the AI about this note.\n\n' +
         '## The AI runs on your device\n\n' +
-        'The first time you open the chat, Cortex downloads a small language model. After that, it works offline. Nothing is sent to any server. The colored pill next to "Ask Cortex" shows whether the model is currently loaded. Tap **Model** in the chat header to switch between Tiny, Small, and Medium.\n',
-      created: Date.now(),
-      updated: Date.now(),
+        'Everything happens locally. Nothing is sent to any server.\n\n' +
+        '## Semantic search\n\n' +
+        'Tap the 🔍 button next to the search box to switch to **semantic mode** (🧠). ' +
+        'Then search by meaning — try typing "how to write" and see what comes up.\n',
+      created: Date.now(), updated: Date.now(),
     };
     const b = {
       id: uid(),
       title: 'How wiki links work',
       body:
         '## Wiki links\n\n' +
-        'Type `[[` in the editor and a suggestion bar appears. Keep typing to filter, or tap a title to insert it.\n\n' +
-        'Formats supported:\n\n' +
-        '- `[[Some Note]]` - links to "Some Note", displays as "Some Note"\n' +
-        '- `[[Some Note|display text]]` - links to "Some Note", displays as "display text"\n' +
-        '- Matching is case-insensitive\n' +
-        '- If the target note does not exist, clicking the link creates it\n\n' +
+        'Type `[[` in the editor and a suggestion bar appears.\n\n' +
+        '- `[[Some Note]]` - displays and links to "Some Note"\n' +
+        '- `[[Some Note|display text]]` - links with custom display\n' +
+        '- Case-insensitive matching\n' +
+        '- Missing targets get created on click\n\n' +
         '## Backlinks\n\n' +
-        'Open "Welcome to Cortex" and you will see a strip at the bottom saying "Linked from" with a chip pointing back here.\n',
-      created: Date.now(),
-      updated: Date.now(),
+        'Each note shows a "Linked from" strip at the bottom listing every note that links to it.\n',
+      created: Date.now(), updated: Date.now(),
     };
     notes.push(a, b);
     try { await dbPut(a); await dbPut(b); } catch(e){}
@@ -1516,13 +1844,26 @@ async function init(){
   renderBacklinks();
   setView('edit');
   setModelState('', 'idle');
+  updateEmbedStatusUI();
   editor.focus();
+
+  // Kick off embedder + sweep in the background (don't block UI).
+  if (notes.some(n => n.body && n.body.trim().length > 20)){
+    setTimeout(async () => {
+      try {
+        await loadEmbedder();
+        await embedSweep();
+      } catch(err){
+        console.warn('[Cortex] Embedder init failed:', err);
+      }
+    }, 1200);
+  }
 }
 
 init();
 
 /* ============================================================
-   17. Service worker
+   18. Service worker
    ============================================================ */
 
 if ('serviceWorker' in navigator){
@@ -1534,4 +1875,4 @@ if ('serviceWorker' in navigator){
 }
 </script>
 </body>
-</html>
+  </html>
