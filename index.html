@@ -67,8 +67,8 @@ body{
   display:flex;flex-direction:column;min-height:0;
   transition:transform .2s ease;
 }
-#searchWrap{padding:8px;flex:0 0 auto;border-bottom:1px solid var(--line);
-  display:flex;gap:6px;align-items:center;}
+#searchWrap{padding:8px;flex:0 0 auto;border-bottom:1px solid var(--line);}
+#searchRow{display:flex;gap:6px;align-items:center;}
 #searchBox{
   flex:1 1 auto;min-width:0;padding:8px 10px;background:var(--panel2);color:var(--text);
   border:1px solid var(--line);border-radius:6px;font-family:inherit;
@@ -83,6 +83,21 @@ body{
 #btnSearchMode.semantic{background:var(--btn);color:#fff;border-color:var(--btn);}
 #btnSearchMode:active{opacity:.85;}
 
+#searchStatus{
+  font-size:11px;color:var(--muted);
+  margin-top:5px;min-height:14px;
+  display:flex;align-items:center;gap:5px;
+}
+#searchStatus.semantic{color:var(--accent);}
+#searchStatus.busy{color:var(--warn);}
+#searchStatus .dot{
+  width:6px;height:6px;border-radius:50%;background:currentColor;
+  display:inline-block;
+}
+#searchStatus.busy .dot{animation:pulse .9s infinite;}
+
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
 #noteList{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .noteItem{
   padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;
@@ -96,11 +111,24 @@ body{
   display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .noteLinkCount{font-size:10px;background:var(--panel2);padding:1px 5px;
   border-radius:8px;color:var(--muted);}
-.noteScore{font-size:10px;background:rgba(167,139,250,.14);padding:1px 6px;
+.noteScore{font-size:10px;background:rgba(167,139,250,.18);padding:1px 6px;
   border-radius:8px;color:var(--accent);font-weight:600;}
 .noteScore.low{background:var(--panel2);color:var(--muted);font-weight:400;}
+
+.searchingRow{
+  padding:20px 12px;text-align:center;
+  color:var(--warn);font-size:13px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.searchingRow .spinner{
+  width:14px;height:14px;border-radius:50%;
+  border:2px solid var(--warn);border-top-color:transparent;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
 .emptyNote{padding:20px 12px;color:var(--muted);font-size:13px;text-align:center;
-  line-height:1.5;}
+  line-height:1.55;}
 
 #embedFooter{
   flex:0 0 auto;padding:7px 12px;
@@ -120,7 +148,10 @@ body{
 #embedDot.ready{background:var(--ok);}
 #embedDot.working{background:var(--warn);animation:pulse .9s infinite;}
 #embedDot.error{background:var(--err);}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+#versionStamp{
+  margin-left:auto;font-size:10px;color:#555;
+  font-family:ui-monospace,Menlo,monospace;
+}
 
 #editorPane{flex:1 1 auto;display:flex;flex-direction:column;
   min-height:0;min-width:0;background:var(--bg);}
@@ -388,13 +419,17 @@ body{
   <div id="main">
     <aside id="sidebar">
       <div id="searchWrap">
-        <input id="searchBox" type="search" placeholder="Search notes..." autocomplete="off">
-        <button id="btnSearchMode" title="Search mode: keyword">🔍</button>
+        <div id="searchRow">
+          <input id="searchBox" type="search" placeholder="Search notes..." autocomplete="off">
+          <button id="btnSearchMode" title="Search mode: keyword">🔍</button>
+        </div>
+        <div id="searchStatus">Keyword search</div>
       </div>
       <div id="noteList"></div>
       <div id="embedFooter" title="Tap to re-index all notes">
         <span id="embedDot"></span>
-        <span id="embedStatusText">Search index ready</span>
+        <span id="embedStatusText">Search index: idle</span>
+        <span id="versionStamp">v11</span>
       </div>
     </aside>
     <section id="editorPane">
@@ -446,6 +481,12 @@ body{
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
 <script>
 "use strict";
+
+/* ============================================================
+   VERSION
+   ============================================================ */
+const APP_VERSION = 'v11';
+console.log('[Cortex] App version:', APP_VERSION);
 
 /* ============================================================
    1. IndexedDB
@@ -599,10 +640,9 @@ let llmGeneration = 0;
 let searchMode = 'keyword';   // 'keyword' | 'semantic'
 let semanticResults = [];     // [{ note, score }]
 let semanticQuery = '';       // the query string whose results we currently hold
-let semanticInFlight = false; // true while a query is being embedded
+let semanticSearching = false; // true while we're embedding + querying
 
 const SEMANTIC_THRESHOLD = 0.20;
-const SEMANTIC_MIN_DISPLAY = 0.15;   // slightly lenient for display badge
 
 /* ============================================================
    4. DOM
@@ -613,6 +653,7 @@ const preview      = document.getElementById('preview');
 const titleInput   = document.getElementById('titleInput');
 const noteList     = document.getElementById('noteList');
 const searchBox    = document.getElementById('searchBox');
+const searchStatus = document.getElementById('searchStatus');
 const btnSearchMode= document.getElementById('btnSearchMode');
 const sidebar      = document.getElementById('sidebar');
 const scrim        = document.getElementById('scrim');
@@ -621,6 +662,7 @@ const backlinksBar = document.getElementById('backlinksBar');
 const embedFooter  = document.getElementById('embedFooter');
 const embedDot     = document.getElementById('embedDot');
 const embedStatusText = document.getElementById('embedStatusText');
+const versionStamp = document.getElementById('versionStamp');
 
 const chatSheet    = document.getElementById('chatSheet');
 const chatScrim    = document.getElementById('chatScrim');
@@ -746,34 +788,26 @@ function updateEmbedStatusUI(){
   const total = notes.length;
   const indexed = window.__indexedCount || 0;
 
-  if (embedStatus === 'idle'){
-    text = 'Search index: idle';
-  } else if (embedStatus === 'loading'){
-    cls = 'loading';
-    text = embedProgressText || 'Loading embedder...';
-  } else if (embedStatus === 'ready'){
-    cls = 'ready';
-    text = 'Search index: ' + indexed + '/' + total;
-  } else if (embedStatus === 'working'){
+  if (embedStatus === 'idle'){ text = 'Search index: idle'; }
+  else if (embedStatus === 'loading'){ cls = 'loading'; text = embedProgressText || 'Loading embedder...'; }
+  else if (embedStatus === 'ready'){ cls = 'ready'; text = 'Search index: ' + indexed + '/' + total; }
+  else if (embedStatus === 'working'){
     cls = 'working';
     text = embedPending.size > 0
       ? 'Embedding ' + embedPending.size + ' note' + (embedPending.size === 1 ? '' : 's') + '...'
       : 'Embedding...';
-  } else if (embedStatus === 'error'){
-    cls = 'error';
-    text = 'Search index error — tap to retry';
   }
+  else if (embedStatus === 'error'){ cls = 'error'; text = 'Search index error — tap to retry'; }
   embedDot.className = cls;
   embedStatusText.textContent = text;
+  versionStamp.textContent = APP_VERSION;
 }
 
 async function refreshEmbedCount(){
   try {
     const all = await dbGetAllEmbeddings();
     window.__indexedCount = all.length;
-  } catch(e){
-    window.__indexedCount = 0;
-  }
+  } catch(e){ window.__indexedCount = 0; }
   updateEmbedStatusUI();
 }
 
@@ -888,9 +922,7 @@ async function reindexAll(){
   try {
     await loadEmbedder();
     for (const note of notes) await runEmbed(note.id, true);
-  } catch(e){
-    console.warn('reindex failed:', e);
-  }
+  } catch(e){ console.warn('reindex failed:', e); }
 }
 
 async function semanticSearch(query, limit){
@@ -901,8 +933,7 @@ async function semanticSearch(query, limit){
   const scored = [];
   for (const rec of all){
     const note = notes.find(n => n.id === rec.id);
-    if (!note) continue;
-    if (!rec.vector) continue;
+    if (!note || !rec.vector) continue;
     const score = dot(qVec, rec.vector);
     scored.push({ note: note, score: score });
   }
@@ -914,19 +945,45 @@ async function semanticSearch(query, limit){
    8. Sidebar
    ============================================================ */
 
+function updateSearchStatus(){
+  const q = searchBox.value.trim();
+  if (searchMode === 'keyword'){
+    searchStatus.className = '';
+    searchStatus.textContent = q ? 'Keyword search' : 'Keyword mode';
+    return;
+  }
+  // semantic
+  if (!q){
+    searchStatus.className = 'semantic';
+    searchStatus.innerHTML = '<span class="dot"></span> Semantic mode — type and pause';
+    return;
+  }
+  if (semanticSearching){
+    searchStatus.className = 'busy';
+    searchStatus.innerHTML = '<span class="dot"></span> Searching…';
+    return;
+  }
+  if (q !== semanticQuery){
+    searchStatus.className = 'semantic';
+    searchStatus.innerHTML = '<span class="dot"></span> Ready — press Enter';
+    return;
+  }
+  searchStatus.className = 'semantic';
+  searchStatus.textContent = semanticResults.length + ' result' + (semanticResults.length === 1 ? '' : 's');
+}
+
 function renderNoteList(){
   const q = searchBox.value.trim();
 
   let items = [];
-  let isSearching = false;
+  let showSearchingRow = false;
 
   if (searchMode === 'semantic'){
     if (!q){
       items = [...notes].sort((a, b) => b.updated - a.updated).map(n => ({ note: n }));
-    } else if (q !== semanticQuery){
-      // Query is newer than the last completed search.
-      // Keep showing whatever results we have, but mark as "searching".
-      isSearching = true;
+    } else if (semanticSearching || q !== semanticQuery){
+      // Either actively searching, or the query is newer than the last result
+      showSearchingRow = true;
       items = semanticResults.map(r => ({ note: r.note, score: r.score }));
     } else {
       items = semanticResults.map(r => ({ note: r.note, score: r.score }));
@@ -943,6 +1000,13 @@ function renderNoteList(){
   }
 
   noteList.textContent = '';
+
+  if (showSearchingRow){
+    const row = document.createElement('div');
+    row.className = 'searchingRow';
+    row.innerHTML = '<span class="spinner"></span> Searching…';
+    noteList.appendChild(row);
+  }
 
   for (const item of items){
     const note = item.note;
@@ -970,7 +1034,8 @@ function renderNoteList(){
       meta.appendChild(badge);
     }
 
-    if (typeof score === 'number' && searchMode === 'semantic' && q){
+    // In semantic mode WITH a completed query, ALWAYS show the score badge.
+    if (searchMode === 'semantic' && q && typeof score === 'number'){
       const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
       const sb = document.createElement('span');
       sb.className = 'noteScore' + (pct < 30 ? ' low' : '');
@@ -984,15 +1049,11 @@ function renderNoteList(){
     noteList.appendChild(el);
   }
 
-  if (!items.length){
+  if (!items.length && !showSearchingRow){
     const empty = document.createElement('div');
     empty.className = 'emptyNote';
     if (q && searchMode === 'semantic'){
-      if (isSearching){
-        empty.textContent = 'Searching…';
-      } else {
-        empty.textContent = 'No notes are related to "' + q + '". Try different phrasing.';
-      }
+      empty.textContent = 'No notes are related to "' + q + '". Try different phrasing, or tap 🧠 to switch back to keyword mode.';
     } else if (q){
       empty.textContent = 'No notes match your search.';
     } else {
@@ -1000,32 +1061,41 @@ function renderNoteList(){
     }
     noteList.appendChild(empty);
   }
+
+  updateSearchStatus();
 }
 
 let semanticDebounce = null;
+
 async function runSemanticQuery(){
   const q = searchBox.value.trim();
   if (!q){
     semanticQuery = '';
     semanticResults = [];
+    semanticSearching = false;
     renderNoteList();
     return;
   }
   if (embedStatus !== 'ready' && embedStatus !== 'working'){
+    // Embedder isn't ready — show status and bail
+    searchStatus.className = 'busy';
+    searchStatus.innerHTML = '<span class="dot"></span> Embedder not ready';
     return;
   }
-  semanticInFlight = true;
+
+  semanticSearching = true;
+  renderNoteList();
+
   try {
     const results = await semanticSearch(q, 50);
-    // Relevance floor — anything below threshold is noise.
     const filtered = results.filter(r => r.score >= SEMANTIC_THRESHOLD);
     semanticQuery = q;
     semanticResults = filtered;
-    renderNoteList();
   } catch(e){
     console.warn('[Cortex] semantic search failed:', e);
   } finally {
-    semanticInFlight = false;
+    semanticSearching = false;
+    renderNoteList();
   }
 }
 
@@ -1044,6 +1114,7 @@ function toggleSearchMode(){
     btnSearchMode.title = 'Search mode: keyword';
     semanticResults = [];
     semanticQuery = '';
+    semanticSearching = false;
     renderNoteList();
   }
 }
@@ -1536,6 +1607,7 @@ function showMemoryInfo(){
   const state = llmEngine ? 'LOADED' : 'not loaded';
   const emb = embedStatus + ' (' + (window.__indexedCount || 0) + ' notes indexed)';
   alert(
+    'App version: ' + APP_VERSION + '\n' +
     'Model state: ' + state + '\n' +
     'Current tier: ' + CURRENT_TIER + '\n' +
     'Model ID: ' + MODEL_ID + '\n' +
@@ -1556,9 +1628,7 @@ async function retrieveContext(question, k){
     return results
       .filter(r => r.note.id !== activeId && r.score > SEMANTIC_THRESHOLD)
       .slice(0, k);
-  } catch(e){
-    return [];
-  }
+  } catch(e){ return []; }
 }
 
 async function buildMessages(){
@@ -1703,14 +1773,26 @@ editor.addEventListener('input', () => {
 });
 titleInput.addEventListener('input', scheduleSave);
 
+// SEARCH INPUT — three ways to trigger a semantic query:
+//   1. Wait 200 ms after typing stops (debounce)
+//   2. Press Enter in the search box (immediate)
+//   3. Tap the 🧠 button again (forces re-run)
 searchBox.addEventListener('input', () => {
   if (searchMode === 'semantic'){
-    // Redraw immediately (so the "Searching…" state shows)
-    renderNoteList();
+    renderNoteList();   // shows "Searching…" state
     clearTimeout(semanticDebounce);
-    semanticDebounce = setTimeout(runSemanticQuery, 350);
+    semanticDebounce = setTimeout(runSemanticQuery, 200);
   } else {
     renderNoteList();
+  }
+});
+searchBox.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter'){
+    e.preventDefault();
+    if (searchMode === 'semantic'){
+      clearTimeout(semanticDebounce);
+      runSemanticQuery();
+    }
   }
 });
 searchBox.addEventListener('search', () => {
@@ -1810,8 +1892,8 @@ async function init(){
         'Tap **Preview** to see the link render. Tap the sparkle icon to ask the AI about this note.\n\n' +
         '## Semantic search\n\n' +
         'Tap the 🔍 button next to the search box to switch to **semantic mode** (🧠). ' +
-        'Then search by meaning — try typing "how to write" or "connecting ideas". ' +
-        'Only notes above the relevance threshold will appear.\n',
+        'Then type a phrase and pause — results appear with percentage scores. ' +
+        'Try "connecting ideas" or "how notes relate".\n',
       created: Date.now(), updated: Date.now(),
     };
     const b = {
@@ -1866,7 +1948,7 @@ init();
 if ('serviceWorker' in navigator){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js', { scope: './' })
-      .then(() => console.log('[Cortex] Service worker active.'))
+      .then(() => console.log('[Cortex] Service worker active. Version:', APP_VERSION))
       .catch((err) => console.warn('[Cortex] SW registration failed:', err));
   });
 }
