@@ -1,6 +1,6 @@
 /* Cortex service worker */
 
-const CACHE_NAME = 'cortex-v13';
+const CACHE_NAME = 'cortex-v14';
 
 const APP_SHELL = [
   './',
