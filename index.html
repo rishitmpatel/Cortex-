@@ -6,9 +6,9 @@
   default-src 'self';
   script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.run;
   style-src 'self' 'unsafe-inline';
-  img-src 'self' data: blob: https://huggingface.co https://*.huggingface.co https://*.hf.co;
+  img-src 'self' data: blob: https://huggingface.co https://*.huggingface.co https://*.hf.co https://raw.githubusercontent.com https://*.githubusercontent.com;
   font-src 'self';
-  connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.run https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co;
+  connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.run https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https://raw.githubusercontent.com https://*.githubusercontent.com https://github.com https://objects.githubusercontent.com;
   worker-src 'self' blob:;
   base-uri 'self';
   form-action 'none';
@@ -451,7 +451,7 @@ body{
       <div id="embedFooter" title="Tap to re-index all notes">
         <span id="embedDot"></span>
         <span id="embedStatusText">Search index: idle</span>
-        <span id="versionStamp">v13</span>
+        <span id="versionStamp">v14</span>
       </div>
     </aside>
     <section id="editorPane">
@@ -507,17 +507,17 @@ body{
 /* ============================================================
    VERSION
    ============================================================ */
-const APP_VERSION = 'v13';
+const APP_VERSION = 'v14';
 const EXPORT_VERSION = 1;
 console.log('[Cortex] App version:', APP_VERSION);
 
 /* ============================================================
    PROMPT BUDGETS
    ============================================================ */
-const MAX_CURRENT_NOTE_CHARS = 1500;   // cap the active note in the prompt
-const MAX_SOURCES = 2;                 // fewer retrieved notes
-const MAX_SOURCE_CHARS = 500;          // shorter excerpts
-const RETRIEVAL_TIMEOUT_MS = 3000;     // skip RAG if it takes longer
+const MAX_CURRENT_NOTE_CHARS = 1500;
+const MAX_SOURCES = 2;
+const MAX_SOURCE_CHARS = 500;
+const RETRIEVAL_TIMEOUT_MS = 3000;
 const STORE_FAST_MODE = 'cortex.fastmode.v1';
 
 let fastMode = false;
@@ -641,8 +641,8 @@ async function dbGetAllEmbeddings(){
 
 const MODEL_CATALOG = {
   tiny:   { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',  label: 'Tiny',   subtitle: 'Qwen 2.5 · 0.5B', size: '~350 MB', desc: 'Fastest. Answers are basic. Phone stays snappy.', minMemory: 0 },
-  small:  { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',  label: 'Small',  subtitle: 'Llama 3.2 · 1B',  size: '~700 MB', desc: 'Good balance. Recommended on phones.', minMemory: 4 },
-  medium: { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',  label: 'Medium', subtitle: 'Llama 3.2 · 3B',  size: '~2 GB',   desc: 'Smarter but heavy. Can lag the phone. Needs 8+ GB RAM.', minMemory: 8 },
+  small:  { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',  label: 'Small',  subtitle: 'Llama 3.2 · 1B',  size: '~700 MB', desc: 'Good balance. Recommended default on phones.', minMemory: 4 },
+  medium: { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',  label: 'Medium', subtitle: 'Llama 3.2 · 3B',  size: '~2 GB',   desc: 'Smarter but heavy. Can lag the phone. Fine on laptops.', minMemory: 8 },
 };
 
 function detectDevice(){
@@ -651,13 +651,16 @@ function detectDevice(){
     cores: navigator.hardwareConcurrency || null,
     webgpu: ('gpu' in navigator),
     userAgent: navigator.userAgent,
+    isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent),
   };
 }
 function recommendModel(specs){
   if (!specs.webgpu) return { tier: null, reason: 'WebGPU not available — AI features disabled.' };
+  // Desktop: recommend Medium. Mobile: recommend Small.
+  if (!specs.isMobile) return { tier: 'medium', reason: 'Desktop detected — Medium recommended.' };
   if (specs.memory === null) return { tier: 'small', reason: 'Memory info unavailable — defaulting to Small.' };
-  if (specs.memory >= 8) return { tier: 'small',  reason: '8+ GB RAM. Small is the snappy default; switch to Medium in Model menu if you want more quality.' };
-  if (specs.memory >= 4) return { tier: 'small',  reason: '4–8 GB RAM — Small is the sweet spot.' };
+  if (specs.memory >= 8) return { tier: 'small', reason: '8+ GB RAM — Small keeps things snappy. Switch to Medium in Model menu for more quality.' };
+  if (specs.memory >= 4) return { tier: 'small', reason: '4–8 GB RAM — Small is the sweet spot.' };
   return { tier: 'tiny', reason: 'Under 4 GB RAM — Tiny for stability.' };
 }
 
@@ -1504,7 +1507,8 @@ function renderMenu(){
   menuCard.appendChild(menuItem({
     label: 'Cortex ' + APP_VERSION,
     desc: notes.length + ' notes · ' + (window.__indexedCount || 0) + ' indexed · ' +
-          CURRENT_TIER + ' model · ' + (DEVICE.memory !== null ? DEVICE.memory + ' GB RAM' : 'unknown RAM'),
+          CURRENT_TIER + ' model · ' + (DEVICE.memory !== null ? DEVICE.memory + ' GB RAM' : 'unknown RAM') +
+          (DEVICE.isMobile ? ' · mobile' : ' · desktop'),
     onClick: () => { closeMenu(); showMemoryInfo(); },
   }));
 
@@ -1703,7 +1707,8 @@ function renderModelOptions(){
   info.style.lineHeight = '1.5';
   const mem = DEVICE.memory !== null ? DEVICE.memory + ' GB' : 'unknown';
   const cores = DEVICE.cores || '?';
-  info.textContent = 'Device: ' + mem + ' RAM, ' + cores + ' cores. ' + RECOMMEND.reason;
+  const form = DEVICE.isMobile ? 'mobile' : 'desktop';
+  info.textContent = 'Device: ' + form + ', ' + mem + ' RAM, ' + cores + ' cores. ' + RECOMMEND.reason;
   modelCard.appendChild(info);
 
   const memBtn = document.createElement('div');
@@ -1749,10 +1754,8 @@ async function selectModel(tier){
 function updateFastChip(){
   if (fastMode){
     chipFast.classList.add('on');
-    chipFast.textContent = '⚡ Fast';
   } else {
     chipFast.classList.remove('on');
-    chipFast.textContent = '⚡ Fast';
   }
 }
 chipFast.addEventListener('click', () => {
@@ -1832,7 +1835,9 @@ async function startEngineLoad(){
   const deviceEl = document.getElementById('chatProgressDevice');
   if (deviceEl){
     deviceEl.textContent = DEVICE.memory !== null
-      ? 'Detected: ' + DEVICE.memory + ' GB RAM, ' + (DEVICE.cores || '?') + ' cores. Loading ' + tierInfo.label + ' (' + tierInfo.size + ').'
+      ? 'Detected: ' + (DEVICE.isMobile ? 'mobile' : 'desktop') + ', ' +
+        DEVICE.memory + ' GB RAM, ' + (DEVICE.cores || '?') + ' cores. Loading ' +
+        tierInfo.label + ' (' + tierInfo.size + ').'
       : 'Device memory not exposed. Loading ' + tierInfo.label + ' (' + tierInfo.size + ').';
   }
   setModelState('loading', 'loading');
@@ -1904,6 +1909,7 @@ function showMemoryInfo(){
   const emb = embedStatus + ' (' + (window.__indexedCount || 0) + ' notes indexed)';
   alert(
     'App version: ' + APP_VERSION + '\n' +
+    'Platform: ' + (DEVICE.isMobile ? 'mobile' : 'desktop') + '\n' +
     'Model state: ' + state + '\n' +
     'Current tier: ' + CURRENT_TIER + '\n' +
     'Model ID: ' + MODEL_ID + '\n' +
