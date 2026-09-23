@@ -452,7 +452,7 @@ body{
       <div id="embedFooter" title="Tap to re-index all notes">
         <span id="embedDot"></span>
         <span id="embedStatusText">Search index: idle</span>
-        <span id="versionStamp">v16</span>
+        <span id="versionStamp">v17</span>
       </div>
     </aside>
     <section id="editorPane">
@@ -540,7 +540,7 @@ body{
 <script>
 "use strict";
 
-const APP_VERSION = 'v16';
+const APP_VERSION = 'v17';
 const EXPORT_VERSION = 1;
 console.log('[Cortex] App version:', APP_VERSION);
 
@@ -1981,6 +1981,7 @@ document.getElementById('quickQuestions').addEventListener('click', () => {
 /* ============================================================
    Sync
    ============================================================ */
+
 function openSyncModal(){
   renderSyncLanding();
   syncModal.classList.add('open');
@@ -1993,126 +1994,260 @@ syncModal.addEventListener('click', (e) => { if (e.target === syncModal) closeSy
 
 function renderSyncLanding(){
   syncCard.textContent = '';
+
   const head = document.createElement('div');
   head.className = 'mHead';
   head.textContent = 'Sync across devices';
   syncCard.appendChild(head);
+
   const body = document.createElement('div');
   body.className = 'syncBody';
-  body.textContent = 'Both devices must be on the same Wi-Fi. One hosts, one joins. You will copy two codes between the devices — any app works.';
+
+  const myCode = window.CortexSync ? window.CortexSync.formatCode(window.CortexSync.getDeviceCode()) : '—';
+  const paired = window.CortexSync ? window.CortexSync.getPairedPeer() : null;
+
+  // Your device code card
+  const card = document.createElement('div');
+  card.style.cssText = 'background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px;';
+  card.innerHTML =
+    '<div style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;">Your device code</div>' +
+    '<div style="font-family:ui-monospace,Menlo,monospace;font-size:24px;font-weight:700;letter-spacing:3px;color:var(--accent);">' + myCode + '</div>' +
+    '<div style="font-size:11px;color:var(--muted);margin-top:6px;">Share this with the other device once to pair.</div>';
+  body.appendChild(card);
+
+  if (paired){
+    const pcard = document.createElement('div');
+    pcard.style.cssText = 'background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px;';
+    const last = paired.lastSync ? new Date(paired.lastSync).toLocaleString() : 'never';
+    pcard.innerHTML =
+      '<div style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;">Paired device</div>' +
+      '<div style="font-size:14px;color:var(--text);font-weight:600;">' + (paired.name || 'Unnamed device') + '</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Code ' + window.CortexSync.formatCode(paired.code) + ' · Last sync ' + last + '</div>';
+    const forgetBtn = document.createElement('button');
+    forgetBtn.className = 'smallBtn';
+    forgetBtn.style.marginTop = '8px';
+    forgetBtn.textContent = 'Forget this device';
+    forgetBtn.addEventListener('click', () => {
+      if (!confirm('Forget ' + (paired.name || 'paired device') + '?')) return;
+      window.CortexSync.forgetPairedPeer();
+      renderSyncLanding();
+    });
+    pcard.appendChild(forgetBtn);
+    body.appendChild(pcard);
+
+    // Auto-sync toggle
+    const toggle = document.createElement('label');
+    toggle.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);padding:8px 0;cursor:pointer;';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = window.CortexSync.getAutoSync();
+    cb.addEventListener('change', () => {
+      window.CortexSync.setAutoSync(cb.checked);
+    });
+    toggle.appendChild(cb);
+    const lbl = document.createElement('span');
+    lbl.textContent = 'Auto-sync when the other device is online';
+    toggle.appendChild(lbl);
+    body.appendChild(toggle);
+  }
+
   syncCard.appendChild(body);
+
+  // Primary actions
   syncCard.appendChild(menuItem({
-    label: '📡  Host this device',
-    desc: 'Generate a code to send to the other device.',
-    onClick: () => startSyncHost(),
+    label: '📡  Host / Show my code',
+    desc: 'Wait for the other device to connect to you.',
+    onClick: () => startSyncQuickHost(),
   }));
+
   syncCard.appendChild(menuItem({
-    label: '📥  Join another device',
-    desc: 'Enter the code from the device that is hosting.',
-    onClick: () => startSyncGuest(),
+    label: '📥  Join with a code',
+    desc: 'Enter the code shown on the other device.',
+    onClick: () => startSyncQuickJoin(),
   }));
-  syncCard.appendChild(menuItem({ label: 'Cancel', onClick: closeSyncModal }));
+
+  syncCard.appendChild(menuItem({
+    label: '⚙️  Advanced — manual codes',
+    desc: 'Copy-paste two long codes between devices. No PeerJS.',
+    onClick: () => renderSyncManualLanding(),
+  }));
+
+  syncCard.appendChild(menuItem({ label: 'Close', onClick: closeSyncModal }));
 }
 
-function syncCallbacksInit(){
-  if (!window.CortexSync) return;
-  window.CortexSync.setNotesProvider(async () => {
-    return notes.map(n => ({
-      id: n.id,
-      title: n.title || 'Untitled',
-      body: n.body || '',
-      created: n.created || Date.now(),
-      updated: n.updated || Date.now(),
-      deleted: !!n.deleted,
-      deletedAt: n.deletedAt || null,
-    }));
+/* ---- Quick host ---- */
+
+async function startSyncQuickHost(){
+  syncCard.textContent = '';
+
+  const head = document.createElement('div');
+  head.className = 'mHead';
+  head.textContent = 'Hosting';
+  syncCard.appendChild(head);
+
+  const body = document.createElement('div');
+  body.className = 'syncBody';
+
+  const card = document.createElement('div');
+  card.style.cssText = 'background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px;text-align:center;';
+  card.innerHTML =
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Your device code</div>' +
+    '<div id="hostBigCode" style="font-family:ui-monospace,Menlo,monospace;font-size:32px;font-weight:700;letter-spacing:5px;color:var(--accent);">·····-····</div>' +
+    '<div style="font-size:12px;color:var(--muted);margin-top:10px;">Enter this on the other device.</div>';
+  body.appendChild(card);
+
+  const status = document.createElement('div');
+  status.className = 'syncStatus';
+  status.id = 'syncStatusBox';
+  status.innerHTML = '<div class="lbl">Status</div><div class="val">Starting...</div>';
+  body.appendChild(status);
+
+  const cancel = document.createElement('button');
+  cancel.className = 'smallBtn';
+  cancel.style.marginTop = '12px';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', () => {
+    if (window.CortexSync) window.CortexSync.reset();
+    closeSyncModal();
   });
-  window.CortexSync.setNotesReceiver(async (theirs) => mergeFromPeer(theirs));
-  window.CortexSync.setProgressCallback(({ state, message }) => updateSyncProgress(state, message));
-  window.CortexSync.setDoneCallback(({ local, remote, peerDevice }) => renderSyncDone(local, remote, peerDevice));
-  window.CortexSync.setErrorCallback((err) => renderSyncError(err && err.message ? err.message : String(err)));
+  body.appendChild(cancel);
+
+  syncCard.appendChild(body);
+
+  try {
+    const { code } = await window.CortexSync.startQuickHost();
+    const big = document.getElementById('hostBigCode');
+    if (big) big.textContent = window.CortexSync.formatCode(code);
+    const st = document.getElementById('syncStatusBox');
+    if (st) st.querySelector('.val').textContent = 'Waiting for the other device to connect...';
+  } catch(err){
+    renderSyncError(err && err.message ? err.message : String(err));
+  }
 }
 
-async function mergeFromPeer(theirs){
-  const myMap = new Map(notes.map(n => [n.id, n]));
-  let added = 0, updated = 0, deleted = 0;
-  for (const their of theirs){
-    if (!their || typeof their.id !== 'string') continue;
-    const mine = myMap.get(their.id);
-    const theirTime = their.deletedAt || their.updated || 0;
-    if (!mine){
-      const incoming = {
-        id: their.id,
-        title: (typeof their.title === 'string') ? their.title.slice(0, 500) : 'Untitled',
-        body: (typeof their.body === 'string') ? their.body.slice(0, 5 * 1024 * 1024) : '',
-        created: (typeof their.created === 'number') ? their.created : Date.now(),
-        updated: (typeof their.updated === 'number') ? their.updated : Date.now(),
-        deleted: !!their.deleted,
-        deletedAt: (typeof their.deletedAt === 'number') ? their.deletedAt : null,
-      };
-      notes.push(incoming);
-      await dbPut(incoming);
-      if (incoming.deleted) deleted++; else added++;
-      continue;
+/* ---- Quick join ---- */
+
+function startSyncQuickJoin(){
+  syncCard.textContent = '';
+
+  const head = document.createElement('div');
+  head.className = 'mHead';
+  head.textContent = 'Join a device';
+  syncCard.appendChild(head);
+
+  const body = document.createElement('div');
+  body.className = 'syncBody';
+
+  const step = document.createElement('div');
+  step.className = 'syncStep';
+  step.textContent = 'Enter the code shown on the other device:';
+  body.appendChild(step);
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.inputMode = 'text';
+  input.autocapitalize = 'characters';
+  input.autocomplete = 'off';
+  input.placeholder = 'ABCD-EFGH';
+  input.maxLength = 9;
+  input.style.cssText =
+    'width:100%;padding:14px 16px;background:var(--panel2);color:var(--accent);' +
+    'border:1px solid var(--line);border-radius:8px;' +
+    'font-family:ui-monospace,Menlo,monospace;font-size:24px;font-weight:700;' +
+    'letter-spacing:4px;text-align:center;outline:none;text-transform:uppercase;';
+  input.addEventListener('input', () => {
+    // Auto-format: strip non-alnum, re-insert dash
+    let v = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (v.length > 4) v = v.slice(0, 4) + '-' + v.slice(4, 8);
+    input.value = v;
+  });
+  body.appendChild(input);
+
+  const btns = document.createElement('div');
+  btns.className = 'syncBtns';
+  const go = document.createElement('button');
+  go.className = 'primaryBtn';
+  go.textContent = 'Connect';
+  go.addEventListener('click', async () => {
+    go.disabled = true;
+    input.disabled = true;
+    try {
+      await window.CortexSync.joinQuick(input.value);
+    } catch(err){
+      go.disabled = false;
+      input.disabled = false;
+      renderSyncError(err && err.message ? err.message : String(err));
     }
-    const myTime = mine.deletedAt || mine.updated || 0;
-    if (theirTime > myTime){
-      const wasDeleted = !!mine.deleted;
-      mine.title = (typeof their.title === 'string') ? their.title.slice(0, 500) : mine.title;
-      mine.body = (typeof their.body === 'string') ? their.body.slice(0, 5 * 1024 * 1024) : mine.body;
-      mine.updated = (typeof their.updated === 'number') ? their.updated : mine.updated;
-      mine.deleted = !!their.deleted;
-      mine.deletedAt = (typeof their.deletedAt === 'number') ? their.deletedAt : null;
-      await dbPut(mine);
-      if (mine.deleted && !wasDeleted){
-        deleted++;
-        try { await dbDeleteEmbedding(mine.id); } catch(e){}
-      } else if (!mine.deleted){
-        updated++;
-        scheduleEmbed(mine.id);
-      }
-    }
-  }
-  await refreshEmbedCount();
-  renderNoteList();
-  renderBacklinks();
-  if (view === 'preview') updatePreview();
-  const active = activeNote();
-  if (!active){
-    const vis = visibleNotes();
-    if (vis.length){
-      const next = [...vis].sort((a, b) => b.updated - a.updated)[0];
-      activeId = next.id;
-      titleInput.value = next.title === 'Untitled' ? '' : (next.title || '');
-      editor.value = next.body || '';
-      editor.scrollTop = 0;
-    } else {
-      await createNote();
-    }
-  }
-  return { added, updated, deleted, total: visibleNotes().length };
+  });
+  btns.appendChild(go);
+  const cancel = document.createElement('button');
+  cancel.className = 'smallBtn';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', closeSyncModal);
+  btns.appendChild(cancel);
+  body.appendChild(btns);
+
+  const status = document.createElement('div');
+  status.className = 'syncStatus';
+  status.id = 'syncStatusBox';
+  status.innerHTML = '<div class="lbl">Status</div><div class="val">Waiting for a code...</div>';
+  body.appendChild(status);
+
+  syncCard.appendChild(body);
+  setTimeout(() => input.focus(), 100);
 }
 
-async function startSyncHost(){
-  if (!window.CortexSync){ renderSyncError('sync.js did not load.'); return; }
+/* ---- Manual fallback ---- */
+
+function renderSyncManualLanding(){
+  syncCard.textContent = '';
+
+  const head = document.createElement('div');
+  head.className = 'mHead';
+  head.textContent = 'Advanced — manual codes';
+  syncCard.appendChild(head);
+
+  const body = document.createElement('div');
+  body.className = 'syncBody';
+  body.innerHTML =
+    '<div class="syncText">Use this if PeerJS is blocked or unavailable. You will copy two long codes between devices.</div>';
+  syncCard.appendChild(body);
+
+  syncCard.appendChild(menuItem({
+    label: '📡  Host (manual)',
+    desc: 'Generate an SDP offer code.',
+    onClick: () => startSyncManualHost(),
+  }));
+
+  syncCard.appendChild(menuItem({
+    label: '📥  Join (manual)',
+    desc: 'Paste an SDP offer, get an SDP answer back.',
+    onClick: () => startSyncManualGuest(),
+  }));
+
+  syncCard.appendChild(menuItem({ label: 'Back', onClick: renderSyncLanding }));
+}
+
+async function startSyncManualHost(){
   syncCard.textContent = '';
   const head = document.createElement('div');
   head.className = 'mHead';
-  head.textContent = 'Host — step 1 of 2';
+  head.textContent = 'Host (manual) — step 1 of 2';
   syncCard.appendChild(head);
   const body = document.createElement('div');
   body.className = 'syncBody';
-  const stepText = document.createElement('div');
-  stepText.className = 'syncStep';
-  stepText.textContent = 'Send this code to the other device:';
-  body.appendChild(stepText);
+
+  const step1 = document.createElement('div');
+  step1.className = 'syncStep';
+  step1.textContent = 'Send this to the other device:';
+  body.appendChild(step1);
+
   const offerTA = document.createElement('textarea');
   offerTA.className = 'syncCode';
   offerTA.readOnly = true;
   offerTA.placeholder = 'Generating...';
   body.appendChild(offerTA);
-  const btns1 = document.createElement('div');
-  btns1.className = 'syncBtns';
+
   const copyBtn = document.createElement('button');
   copyBtn.className = 'smallBtn';
   copyBtn.textContent = 'Copy code';
@@ -2121,76 +2256,86 @@ async function startSyncHost(){
     catch(e){ offerTA.select(); document.execCommand('copy'); copyBtn.textContent = 'Copied!'; }
     setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1500);
   });
-  btns1.appendChild(copyBtn);
-  body.appendChild(btns1);
+  body.appendChild(copyBtn);
+
   const step2 = document.createElement('div');
   step2.className = 'syncStep';
   step2.style.marginTop = '14px';
-  step2.textContent = 'Paste the answer code you receive back:';
+  step2.textContent = 'Paste the answer code back:';
   body.appendChild(step2);
+
   const answerTA = document.createElement('textarea');
   answerTA.className = 'syncCode';
   answerTA.placeholder = 'Paste the answer code here';
   body.appendChild(answerTA);
-  const btns2 = document.createElement('div');
-  btns2.className = 'syncBtns';
-  const connectBtn = document.createElement('button');
-  connectBtn.className = 'primaryBtn';
-  connectBtn.textContent = 'Connect';
-  connectBtn.addEventListener('click', async () => {
-    connectBtn.disabled = true;
-    try { await window.CortexSync.acceptAnswer(answerTA.value.trim()); }
+
+  const btns = document.createElement('div');
+  btns.className = 'syncBtns';
+  const connect = document.createElement('button');
+  connect.className = 'primaryBtn';
+  connect.textContent = 'Connect';
+  connect.addEventListener('click', async () => {
+    connect.disabled = true;
+    try { await window.CortexSync.acceptManualAnswer(answerTA.value.trim()); }
     catch(err){ renderSyncError(err && err.message ? err.message : String(err)); }
   });
-  btns2.appendChild(connectBtn);
-  const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'smallBtn';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.addEventListener('click', closeSyncModal);
-  btns2.appendChild(cancelBtn);
-  body.appendChild(btns2);
+  btns.appendChild(connect);
+  const cancel = document.createElement('button');
+  cancel.className = 'smallBtn';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', closeSyncModal);
+  btns.appendChild(cancel);
+  body.appendChild(btns);
+
   const status = document.createElement('div');
   status.className = 'syncStatus';
   status.id = 'syncStatusBox';
   status.innerHTML = '<div class="lbl">Status</div><div class="val">Creating connection code...</div>';
   body.appendChild(status);
+
   syncCard.appendChild(body);
+
   try {
-    const offerCode = await window.CortexSync.startHost();
-    offerTA.value = offerCode;
-    status.querySelector('.val').textContent = 'Ready. Send the code above to the other device.';
+    const code = await window.CortexSync.startManualHost();
+    offerTA.value = code;
+    const st = document.getElementById('syncStatusBox');
+    if (st) st.querySelector('.val').textContent = 'Ready. Send the code above.';
   } catch(err){
     renderSyncError(err && err.message ? err.message : String(err));
   }
 }
 
-function startSyncGuest(){
-  if (!window.CortexSync){ renderSyncError('sync.js did not load.'); return; }
+function startSyncManualGuest(){
   syncCard.textContent = '';
   const head = document.createElement('div');
   head.className = 'mHead';
-  head.textContent = 'Join — step 1 of 2';
+  head.textContent = 'Join (manual) — step 1 of 2';
   syncCard.appendChild(head);
   const body = document.createElement('div');
   body.className = 'syncBody';
+
   const step1 = document.createElement('div');
   step1.className = 'syncStep';
   step1.textContent = 'Paste the host code:';
   body.appendChild(step1);
+
   const offerTA = document.createElement('textarea');
   offerTA.className = 'syncCode';
   offerTA.placeholder = 'Paste the host code here';
   body.appendChild(offerTA);
+
   const step2 = document.createElement('div');
   step2.className = 'syncStep';
   step2.style.marginTop = '14px';
-  step2.textContent = 'Send this answer code back to the host:';
+  step2.textContent = 'Send this answer code back:';
   body.appendChild(step2);
+
   const answerTA = document.createElement('textarea');
   answerTA.className = 'syncCode';
   answerTA.readOnly = true;
   answerTA.placeholder = '(appears after you tap Connect)';
   body.appendChild(answerTA);
+
   const copyBtn = document.createElement('button');
   copyBtn.className = 'smallBtn';
   copyBtn.textContent = 'Copy answer code';
@@ -2200,39 +2345,44 @@ function startSyncGuest(){
     catch(e){ answerTA.select(); document.execCommand('copy'); copyBtn.textContent = 'Copied!'; }
     setTimeout(() => { copyBtn.textContent = 'Copy answer code'; }, 1500);
   });
+
   const btns = document.createElement('div');
   btns.className = 'syncBtns';
-  const connectBtn = document.createElement('button');
-  connectBtn.className = 'primaryBtn';
-  connectBtn.textContent = 'Connect';
-  connectBtn.addEventListener('click', async () => {
-    connectBtn.disabled = true;
+  const connect = document.createElement('button');
+  connect.className = 'primaryBtn';
+  connect.textContent = 'Connect';
+  connect.addEventListener('click', async () => {
+    connect.disabled = true;
     try {
-      const answerCode = await window.CortexSync.joinWithOffer(offerTA.value.trim());
-      answerTA.value = answerCode;
+      const answer = await window.CortexSync.joinManualOffer(offerTA.value.trim());
+      answerTA.value = answer;
       copyBtn.disabled = false;
-      const status = document.getElementById('syncStatusBox');
-      if (status) status.querySelector('.val').textContent = 'Answer code ready. Send it back to the host.';
+      const st = document.getElementById('syncStatusBox');
+      if (st) st.querySelector('.val').textContent = 'Answer code ready. Send it back.';
     } catch(err){
-      connectBtn.disabled = false;
+      connect.disabled = false;
       renderSyncError(err && err.message ? err.message : String(err));
     }
   });
-  btns.appendChild(connectBtn);
-  const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'smallBtn';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.addEventListener('click', closeSyncModal);
-  btns.appendChild(cancelBtn);
+  btns.appendChild(connect);
+  const cancel = document.createElement('button');
+  cancel.className = 'smallBtn';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', closeSyncModal);
+  btns.appendChild(cancel);
   body.appendChild(btns);
   body.appendChild(copyBtn);
+
   const status = document.createElement('div');
   status.className = 'syncStatus';
   status.id = 'syncStatusBox';
   status.innerHTML = '<div class="lbl">Status</div><div class="val">Waiting for host code...</div>';
   body.appendChild(status);
+
   syncCard.appendChild(body);
 }
+
+/* ---- Shared status helpers ---- */
 
 function updateSyncProgress(state, message){
   const box = document.getElementById('syncStatusBox');
@@ -2280,6 +2430,92 @@ function renderSyncDone(local, remote, peerDevice){
   syncCard.appendChild(body);
 }
 
+/* ---- Callbacks wiring ---- */
+
+function syncCallbacksInit(){
+  if (!window.CortexSync) return;
+  window.CortexSync.setNotesProvider(async () => {
+    return notes.map(n => ({
+      id: n.id,
+      title: n.title || 'Untitled',
+      body: n.body || '',
+      created: n.created || Date.now(),
+      updated: n.updated || Date.now(),
+      deleted: !!n.deleted,
+      deletedAt: n.deletedAt || null,
+    }));
+  });
+  window.CortexSync.setNotesReceiver(async (theirs) => mergeFromPeer(theirs));
+  window.CortexSync.setProgressCallback(({ state, message }) => updateSyncProgress(state, message));
+  window.CortexSync.setDoneCallback(({ local, remote, peerDevice }) => renderSyncDone(local, remote, peerDevice));
+  window.CortexSync.setErrorCallback((err) => renderSyncError(err && err.message ? err.message : String(err)));
+}
+
+async function mergeFromPeer(theirs){
+  const myMap = new Map(notes.map(n => [n.id, n]));
+  let added = 0, updated = 0, deleted = 0;
+
+  for (const their of theirs){
+    if (!their || typeof their.id !== 'string') continue;
+    const mine = myMap.get(their.id);
+    const theirTime = their.deletedAt || their.updated || 0;
+
+    if (!mine){
+      const incoming = {
+        id: their.id,
+        title: (typeof their.title === 'string') ? their.title.slice(0, 500) : 'Untitled',
+        body: (typeof their.body === 'string') ? their.body.slice(0, 5 * 1024 * 1024) : '',
+        created: (typeof their.created === 'number') ? their.created : Date.now(),
+        updated: (typeof their.updated === 'number') ? their.updated : Date.now(),
+        deleted: !!their.deleted,
+        deletedAt: (typeof their.deletedAt === 'number') ? their.deletedAt : null,
+      };
+      notes.push(incoming);
+      await dbPut(incoming);
+      if (incoming.deleted) deleted++; else added++;
+      continue;
+    }
+
+    const myTime = mine.deletedAt || mine.updated || 0;
+    if (theirTime > myTime){
+      const wasDeleted = !!mine.deleted;
+      mine.title = (typeof their.title === 'string') ? their.title.slice(0, 500) : mine.title;
+      mine.body = (typeof their.body === 'string') ? their.body.slice(0, 5 * 1024 * 1024) : mine.body;
+      mine.updated = (typeof their.updated === 'number') ? their.updated : mine.updated;
+      mine.deleted = !!their.deleted;
+      mine.deletedAt = (typeof their.deletedAt === 'number') ? their.deletedAt : null;
+      await dbPut(mine);
+      if (mine.deleted && !wasDeleted){
+        deleted++;
+        try { await dbDeleteEmbedding(mine.id); } catch(e){}
+      } else if (!mine.deleted){
+        updated++;
+        scheduleEmbed(mine.id);
+      }
+    }
+  }
+
+  await refreshEmbedCount();
+  renderNoteList();
+  renderBacklinks();
+  if (view === 'preview') updatePreview();
+
+  const active = activeNote();
+  if (!active){
+    const vis = visibleNotes();
+    if (vis.length){
+      const next = [...vis].sort((a, b) => b.updated - a.updated)[0];
+      activeId = next.id;
+      titleInput.value = next.title === 'Untitled' ? '' : (next.title || '');
+      editor.value = next.body || '';
+      editor.scrollTop = 0;
+    } else {
+      await createNote();
+    }
+  }
+
+  return { added, updated, deleted, total: visibleNotes().length };
+}
 /* ============================================================
    Events
    ============================================================ */
