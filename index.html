@@ -96,9 +96,11 @@ body{
   display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .noteLinkCount{font-size:10px;background:var(--panel2);padding:1px 5px;
   border-radius:8px;color:var(--muted);}
-.noteScore{font-size:10px;background:var(--panel2);padding:1px 5px;
-  border-radius:8px;color:var(--accent);}
-.emptyNote{padding:20px 12px;color:var(--muted);font-size:13px;text-align:center;}
+.noteScore{font-size:10px;background:rgba(167,139,250,.14);padding:1px 6px;
+  border-radius:8px;color:var(--accent);font-weight:600;}
+.noteScore.low{background:var(--panel2);color:var(--muted);font-weight:400;}
+.emptyNote{padding:20px 12px;color:var(--muted);font-size:13px;text-align:center;
+  line-height:1.5;}
 
 #embedFooter{
   flex:0 0 auto;padding:7px 12px;
@@ -446,7 +448,7 @@ body{
 "use strict";
 
 /* ============================================================
-   1. IndexedDB  (v2: adds 'embeddings' store)
+   1. IndexedDB
    ============================================================ */
 
 const DB_NAME = 'cortex-db';
@@ -475,18 +477,6 @@ function getDB(){
   }
   return dbPromise;
 }
-
-function txPromise(storeName, mode, fn){
-  return getDB().then(d => new Promise((resolve, reject) => {
-    const tx = d.transaction(storeName, mode);
-    const store = tx.objectStore(storeName);
-    const result = fn(store);
-    tx.oncomplete = () => resolve(result && result._v !== undefined ? result._v : result);
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  }));
-}
-
 async function dbGetAll(){
   const d = await getDB();
   return new Promise((resolve, reject) => {
@@ -514,8 +504,6 @@ async function dbDelete(id){
     tx.onerror = () => reject(tx.error);
   });
 }
-
-/* ---- embeddings store ---- */
 async function dbGetEmbedding(id){
   const d = await getDB();
   return new Promise((resolve, reject) => {
@@ -610,7 +598,11 @@ let llmGeneration = 0;
 
 let searchMode = 'keyword';   // 'keyword' | 'semantic'
 let semanticResults = [];     // [{ note, score }]
-let semanticQuery = '';
+let semanticQuery = '';       // the query string whose results we currently hold
+let semanticInFlight = false; // true while a query is being embedded
+
+const SEMANTIC_THRESHOLD = 0.20;
+const SEMANTIC_MIN_DISPLAY = 0.15;   // slightly lenient for display badge
 
 /* ============================================================
    4. DOM
@@ -676,9 +668,7 @@ function sanitizeHTML(html){
 }
 function simpleHash(s){
   let h = 5381;
-  for (let i = 0; i < s.length; i++){
-    h = ((h << 5) + h) ^ s.charCodeAt(i);
-  }
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
   return h >>> 0;
 }
 function dot(a, b){
@@ -739,17 +729,17 @@ function styleWikiLinks(){
 }
 
 /* ============================================================
-   7. Embeddings (transformers.js)
+   7. Embeddings
    ============================================================ */
 
 const EMBED_MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
 
 let embedder = null;
 let embedderLoading = null;
-let embedStatus = 'idle';        // 'idle' | 'loading' | 'ready' | 'working' | 'error'
+let embedStatus = 'idle';
 let embedProgressText = '';
-const embedTimers = new Map();   // noteId -> timeout
-const embedPending = new Set();  // noteIds currently being embedded
+const embedTimers = new Map();
+const embedPending = new Set();
 
 function updateEmbedStatusUI(){
   let cls = '', text = '';
@@ -763,9 +753,7 @@ function updateEmbedStatusUI(){
     text = embedProgressText || 'Loading embedder...';
   } else if (embedStatus === 'ready'){
     cls = 'ready';
-    text = indexed >= total
-      ? 'Search index: ' + indexed + '/' + total
-      : 'Search index: ' + indexed + '/' + total;
+    text = 'Search index: ' + indexed + '/' + total;
   } else if (embedStatus === 'working'){
     cls = 'working';
     text = embedPending.size > 0
@@ -773,7 +761,7 @@ function updateEmbedStatusUI(){
       : 'Embedding...';
   } else if (embedStatus === 'error'){
     cls = 'error';
-    text = 'Search index error';
+    text = 'Search index error — tap to retry';
   }
   embedDot.className = cls;
   embedStatusText.textContent = text;
@@ -862,21 +850,14 @@ async function runEmbed(noteId, force){
 
   try {
     const vec = await embedText(body);
-    await dbPutEmbedding({
-      id: noteId,
-      vector: vec,
-      hash: hash,
-      updated: Date.now(),
-    });
+    await dbPutEmbedding({ id: noteId, vector: vec, hash: hash, updated: Date.now() });
     await refreshEmbedCount();
   } catch(err){
     console.warn('[Cortex] embed failed:', noteId, err);
     embedStatus = 'error';
   } finally {
     embedPending.delete(noteId);
-    if (embedPending.size === 0 && embedStatus === 'working'){
-      embedStatus = 'ready';
-    }
+    if (embedPending.size === 0 && embedStatus === 'working') embedStatus = 'ready';
     updateEmbedStatusUI();
   }
 }
@@ -899,18 +880,14 @@ async function embedSweep(){
   for (const note of notes){
     const cur = map.get(note.id);
     const h = simpleHash(note.body || '');
-    if (!cur || cur.hash !== h){
-      scheduleEmbed(note.id);
-    }
+    if (!cur || cur.hash !== h) scheduleEmbed(note.id);
   }
 }
 
 async function reindexAll(){
   try {
     await loadEmbedder();
-    for (const note of notes){
-      await runEmbed(note.id, true);
-    }
+    for (const note of notes) await runEmbed(note.id, true);
   } catch(e){
     console.warn('reindex failed:', e);
   }
@@ -940,13 +917,20 @@ async function semanticSearch(query, limit){
 function renderNoteList(){
   const q = searchBox.value.trim();
 
-  let items = [];   // [{ note, score? }]
+  let items = [];
+  let isSearching = false;
 
-  if (searchMode === 'semantic' && q){
-    if (q !== semanticQuery) return;   // waiting for search
-    items = semanticResults.map(r => ({ note: r.note, score: r.score }));
-  } else if (searchMode === 'semantic'){
-    items = [...notes].sort((a, b) => b.updated - a.updated).map(n => ({ note: n }));
+  if (searchMode === 'semantic'){
+    if (!q){
+      items = [...notes].sort((a, b) => b.updated - a.updated).map(n => ({ note: n }));
+    } else if (q !== semanticQuery){
+      // Query is newer than the last completed search.
+      // Keep showing whatever results we have, but mark as "searching".
+      isSearching = true;
+      items = semanticResults.map(r => ({ note: r.note, score: r.score }));
+    } else {
+      items = semanticResults.map(r => ({ note: r.note, score: r.score }));
+    }
   } else {
     const lq = q.toLowerCase();
     const sorted = [...notes].sort((a, b) => b.updated - a.updated);
@@ -960,9 +944,12 @@ function renderNoteList(){
 
   noteList.textContent = '';
 
-  for (const { note, score } of items){
-    const item = document.createElement('div');
-    item.className = 'noteItem' + (note.id === activeId ? ' active' : '');
+  for (const item of items){
+    const note = item.note;
+    const score = item.score;
+
+    const el = document.createElement('div');
+    el.className = 'noteItem' + (note.id === activeId ? ' active' : '');
 
     const title = document.createElement('div');
     title.className = 'noteTitle';
@@ -982,24 +969,30 @@ function renderNoteList(){
       badge.textContent = '← ' + bl.length;
       meta.appendChild(badge);
     }
+
     if (typeof score === 'number' && searchMode === 'semantic' && q){
+      const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
       const sb = document.createElement('span');
-      sb.className = 'noteScore';
-      sb.textContent = Math.round(score * 100) + '%';
+      sb.className = 'noteScore' + (pct < 30 ? ' low' : '');
+      sb.textContent = pct + '%';
       meta.appendChild(sb);
     }
 
-    item.appendChild(title);
-    item.appendChild(meta);
-    item.addEventListener('click', () => switchNote(note.id));
-    noteList.appendChild(item);
+    el.appendChild(title);
+    el.appendChild(meta);
+    el.addEventListener('click', () => switchNote(note.id));
+    noteList.appendChild(el);
   }
 
   if (!items.length){
     const empty = document.createElement('div');
     empty.className = 'emptyNote';
     if (q && searchMode === 'semantic'){
-      empty.textContent = 'No results yet. Try a different phrase.';
+      if (isSearching){
+        empty.textContent = 'Searching…';
+      } else {
+        empty.textContent = 'No notes are related to "' + q + '". Try different phrasing.';
+      }
     } else if (q){
       empty.textContent = 'No notes match your search.';
     } else {
@@ -1018,21 +1011,21 @@ async function runSemanticQuery(){
     renderNoteList();
     return;
   }
-  if (embedStatus === 'error'){
-    return;
-  }
   if (embedStatus !== 'ready' && embedStatus !== 'working'){
-    embedStatusText.textContent = 'Loading embedder...';
     return;
   }
+  semanticInFlight = true;
   try {
-    embedPending.size = embedPending.size;   // no-op, keeps UI stable
-    const results = await semanticSearch(q, 30);
+    const results = await semanticSearch(q, 50);
+    // Relevance floor — anything below threshold is noise.
+    const filtered = results.filter(r => r.score >= SEMANTIC_THRESHOLD);
     semanticQuery = q;
-    semanticResults = results;
+    semanticResults = filtered;
     renderNoteList();
   } catch(e){
-    console.warn('semantic search failed:', e);
+    console.warn('[Cortex] semantic search failed:', e);
+  } finally {
+    semanticInFlight = false;
   }
 }
 
@@ -1042,8 +1035,8 @@ function toggleSearchMode(){
     btnSearchMode.textContent = '🧠';
     btnSearchMode.classList.add('semantic');
     btnSearchMode.title = 'Search mode: semantic';
-    // Kick off a query if there's text
     if (searchBox.value.trim()) runSemanticQuery();
+    else renderNoteList();
   } else {
     searchMode = 'keyword';
     btnSearchMode.textContent = '🔍';
@@ -1115,7 +1108,6 @@ function scheduleSave(){
     renderNoteList();
     renderBacklinks();
     if (view === 'preview') updatePreview();
-    // Eager embedding: 5 seconds after the last edit
     if (activeId) scheduleEmbed(activeId);
   }, 400);
 }
@@ -1430,7 +1422,6 @@ function appendMessage(role, text){
   chatMessages.scrollTop = chatMessages.scrollHeight;
   return el;
 }
-
 function attachSources(msgEl, sources){
   if (!sources || !sources.length) return;
   const src = document.createElement('div');
@@ -1563,7 +1554,7 @@ async function retrieveContext(question, k){
   try {
     const results = await semanticSearch(question, k + 2);
     return results
-      .filter(r => r.note.id !== activeId && r.score > 0.20)
+      .filter(r => r.note.id !== activeId && r.score > SEMANTIC_THRESHOLD)
       .slice(0, k);
   } catch(e){
     return [];
@@ -1635,9 +1626,9 @@ async function sendMessage(text){
   const assistantEl = appendMessage('assistant', '...');
 
   try {
-    const { messages, sources } = await buildMessages();
+    const built = await buildMessages();
     const chunks = await llmEngine.chat.completions.create({
-      messages: messages,
+      messages: built.messages,
       temperature: 0.7,
       stream: true,
     });
@@ -1666,7 +1657,7 @@ async function sendMessage(text){
     }
     flush();
     if (!started) assistantEl.textContent = '(no response)';
-    if (sources.length) attachSources(assistantEl, sources);
+    if (built.sources.length) attachSources(assistantEl, built.sources);
     chatHistory.push({ role: 'assistant', content: full });
   } catch(err){
     assistantEl.textContent = 'Error: ' + (err && err.message ? err.message : err);
@@ -1714,6 +1705,8 @@ titleInput.addEventListener('input', scheduleSave);
 
 searchBox.addEventListener('input', () => {
   if (searchMode === 'semantic'){
+    // Redraw immediately (so the "Searching…" state shows)
+    renderNoteList();
     clearTimeout(semanticDebounce);
     semanticDebounce = setTimeout(runSemanticQuery, 350);
   } else {
@@ -1727,6 +1720,12 @@ searchBox.addEventListener('search', () => {
 btnSearchMode.addEventListener('click', toggleSearchMode);
 
 embedFooter.addEventListener('click', () => {
+  if (embedStatus === 'error'){
+    embedderLoading = null;
+    embedStatus = 'idle';
+    embedSweep().catch(() => {});
+    return;
+  }
   if (confirm('Re-index all notes? This recomputes embeddings for every note.')){
     reindexAll();
   }
@@ -1809,11 +1808,10 @@ async function init(){
         '# Welcome to Cortex\n\n' +
         'This is a note. It links to another note: [[How wiki links work]].\n\n' +
         'Tap **Preview** to see the link render. Tap the sparkle icon to ask the AI about this note.\n\n' +
-        '## The AI runs on your device\n\n' +
-        'Everything happens locally. Nothing is sent to any server.\n\n' +
         '## Semantic search\n\n' +
         'Tap the 🔍 button next to the search box to switch to **semantic mode** (🧠). ' +
-        'Then search by meaning — try typing "how to write" and see what comes up.\n',
+        'Then search by meaning — try typing "how to write" or "connecting ideas". ' +
+        'Only notes above the relevance threshold will appear.\n',
       created: Date.now(), updated: Date.now(),
     };
     const b = {
@@ -1847,7 +1845,6 @@ async function init(){
   updateEmbedStatusUI();
   editor.focus();
 
-  // Kick off embedder + sweep in the background (don't block UI).
   if (notes.some(n => n.body && n.body.trim().length > 20)){
     setTimeout(async () => {
       try {
@@ -1875,4 +1872,4 @@ if ('serviceWorker' in navigator){
 }
 </script>
 </body>
-  </html>
+</html>
