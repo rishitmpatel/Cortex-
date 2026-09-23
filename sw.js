@@ -1,10 +1,11 @@
 /* Cortex service worker */
 
-const CACHE_NAME = 'cortex-v14';
+const CACHE_NAME = 'cortex-v15';
 
 const APP_SHELL = [
   './',
   './index.html',
+  './sync.js',
   './manifest.json',
   './icon.svg',
   './icon-maskable.svg',
@@ -40,7 +41,6 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(cacheFirst(req));
     return;
   }
-  // Everything else — Hugging Face, esm.run — pass through to the network.
 });
 
 async function cacheFirst(req){
