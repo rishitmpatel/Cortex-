@@ -18,6 +18,7 @@
   --btn:#7c3aed; --hover:#2a2a2a;
   --md-heading:#569cd6; --md-link:#4ec9b0; --md-code:#ce9178;
   --md-quote:#6a9955; --md-rule:#3c3c3c;
+  --err:#f48771;
   --fs:16px; --vvh:100dvh; --vvt:0px;
   --sidebar-width:260px;
 }
@@ -32,19 +33,20 @@ body{
   display:flex;flex-direction:column;background:var(--bg);}
 
 /* ---- top bar ---- */
-#topbar{flex:0 0 auto;height:50px;display:flex;align-items:center;gap:8px;
-  padding:0 8px 0 8px;background:var(--panel);border-bottom:1px solid var(--line);}
+#topbar{flex:0 0 auto;height:50px;display:flex;align-items:center;gap:6px;
+  padding:0 8px;background:var(--panel);border-bottom:1px solid var(--line);}
 #brand{font-weight:600;font-size:15px;flex:1;text-align:center;color:#cccccc;}
 #brand em{font-style:normal;color:var(--accent);}
 .iconBtn{background:transparent;border:none;color:var(--text);
-  width:40px;height:38px;border-radius:6px;font-size:18px;cursor:pointer;padding:0;}
+  width:38px;height:38px;border-radius:6px;font-size:18px;cursor:pointer;padding:0;}
 .iconBtn:active{background:var(--hover);}
 .textBtn{background:var(--panel2);border:1px solid var(--line);color:var(--text);
-  height:34px;padding:0 12px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:500;}
+  height:34px;padding:0 11px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:500;}
 .textBtn:active{background:var(--btn);color:#fff;border-color:var(--btn);}
 .primaryBtn{background:var(--btn);border:none;color:#fff;
   height:34px;padding:0 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;}
 .primaryBtn:active{opacity:.85;}
+.primaryBtn:disabled{opacity:.5;cursor:not-allowed;}
 
 /* ---- main layout ---- */
 #main{flex:1 1 auto;display:flex;min-height:0;position:relative;}
@@ -122,23 +124,18 @@ body{
 #preview table{border-collapse:collapse;}
 #preview th,#preview td{border:1px solid var(--line);padding:6px 10px;}
 
-/* wiki links in preview */
 #preview a.wikilink{
-  color:var(--accent);
-  text-decoration:none;
-  border-bottom:1px solid var(--accent);
-  padding-bottom:1px;
-  cursor:pointer;
+  color:var(--accent);text-decoration:none;
+  border-bottom:1px solid var(--accent);padding-bottom:1px;cursor:pointer;
 }
 #preview a.wikilink-missing{
-  color:var(--muted);
-  border-bottom:1px dashed var(--muted);
+  color:var(--muted);border-bottom:1px dashed var(--muted);
 }
 #preview a.wikilink:active{background:rgba(167,139,250,.15);}
 
-/* ---- link autocomplete bar ---- */
+/* ---- link autocomplete ---- */
 #linkSuggest{
-  flex:0 0 auto;display:none;gap:6px;padding:8px 8px;
+  flex:0 0 auto;display:none;gap:6px;padding:8px;
   background:var(--panel2);border-top:1px solid var(--line);
   overflow-x:auto;overflow-y:hidden;white-space:nowrap;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;
@@ -155,7 +152,6 @@ body{
 /* ---- backlinks bar ---- */
 #backlinksBar{
   flex:0 0 auto;display:none;gap:6px;padding:8px 10px;
-  padding-bottom:calc(8px + env(safe-area-inset-bottom));
   background:var(--panel);border-top:1px solid var(--line);
   overflow-x:auto;overflow-y:hidden;white-space:nowrap;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;
@@ -174,12 +170,95 @@ body{
 }
 .backlinkChip:active{background:var(--btn);color:#fff;border-color:var(--btn);}
 
+/* ---- chat sheet ---- */
+#chatScrim{
+  position:absolute;inset:0;background:rgba(0,0,0,.5);
+  opacity:0;pointer-events:none;transition:opacity .22s;z-index:65;
+}
+#chatScrim.show{opacity:1;pointer-events:auto;}
+#chatSheet{
+  position:absolute;left:0;right:0;bottom:0;
+  height:72%;
+  background:var(--panel);border-top:1px solid var(--line);
+  transform:translateY(105%);transition:transform .25s ease;
+  display:flex;flex-direction:column;
+  z-index:70;
+  border-radius:12px 12px 0 0;
+  box-shadow:0 -12px 40px rgba(0,0,0,.65);
+}
+#chatSheet.open{transform:translateY(0);}
+#chatHead{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:10px 12px;border-bottom:1px solid var(--line);
+  font-size:13px;font-weight:600;letter-spacing:.2px;
+}
+#chatHead .grp{display:flex;gap:6px;}
+.smallBtn{
+  background:var(--panel2);border:1px solid var(--line);color:var(--text);
+  border-radius:5px;padding:5px 10px;font-size:12px;cursor:pointer;
+}
+.smallBtn:active{background:var(--btn);color:#fff;}
+#chatMessages{
+  flex:1 1 auto;overflow-y:auto;padding:12px;
+  display:flex;flex-direction:column;gap:10px;
+  -webkit-overflow-scrolling:touch;
+}
+.msg{
+  max-width:88%;padding:9px 12px;border-radius:12px;
+  font-size:14px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;
+}
+.msg.user{align-self:flex-end;background:var(--btn);color:#fff;}
+.msg.assistant{align-self:flex-start;background:var(--panel2);
+  color:var(--text);border:1px solid var(--line);}
+.msg.assistant.error{color:var(--err);}
+.msg.system{
+  align-self:center;background:transparent;color:var(--muted);
+  font-size:12px;font-style:italic;text-align:center;max-width:92%;
+  padding:4px 8px;
+}
+#chatProgress{
+  display:none;padding:10px 12px;font-size:13px;color:var(--muted);
+  border-bottom:1px solid var(--line);
+}
+#chatProgress .bar{
+  height:4px;background:var(--panel2);border-radius:2px;
+  overflow:hidden;margin-top:8px;
+}
+#chatProgress .bar > div{
+  height:100%;background:var(--accent);width:0%;
+  transition:width .3s ease;
+}
+#chatQuickBar{
+  flex:0 0 auto;display:flex;gap:6px;padding:6px 12px;
+  background:var(--panel);border-top:1px solid var(--line);
+  overflow-x:auto;scrollbar-width:none;
+}
+#chatQuickBar::-webkit-scrollbar{display:none;}
+.quickChip{
+  flex:0 0 auto;padding:6px 11px;border-radius:14px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--muted);
+  font-size:12px;cursor:pointer;user-select:none;-webkit-user-select:none;
+}
+.quickChip:active{background:var(--btn);color:#fff;border-color:var(--btn);}
+#chatInputBar{
+  flex:0 0 auto;display:flex;gap:8px;padding:10px 12px;
+  padding-bottom:calc(10px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--line);align-items:flex-end;
+}
+#chatInput{
+  flex:1;background:var(--panel2);border:1px solid var(--line);
+  border-radius:8px;padding:9px 12px;color:var(--text);
+  font-family:inherit;font-size:14px;resize:none;outline:none;
+  max-height:120px;min-height:38px;line-height:1.4;
+}
+#chatInput:focus{border-color:var(--accent);}
+#chatInput:disabled{opacity:.5;}
+
 /* ---- scrim for mobile sidebar ---- */
 #scrim{position:absolute;inset:0;background:rgba(0,0,0,.5);
   opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;}
 #scrim.show{opacity:1;pointer-events:auto;}
 
-/* ---- mobile ---- */
 @media (max-width: 700px){
   #sidebar{
     position:absolute;left:0;top:0;bottom:0;width:280px;z-index:100;
@@ -196,6 +275,7 @@ body{
   <header id="topbar">
     <button id="btnSidebar" class="iconBtn" title="Notes">☰</button>
     <div id="brand">Cortex <em>✎</em></div>
+    <button id="btnChat" class="iconBtn" title="Ask Cortex">✨</button>
     <button id="btnPreview" class="textBtn" title="Toggle preview">Preview</button>
     <button id="btnNew" class="primaryBtn" title="New note">+ New</button>
   </header>
@@ -218,6 +298,31 @@ body{
       <div id="backlinksBar"></div>
     </section>
     <div id="scrim"></div>
+
+    <div id="chatScrim"></div>
+    <div id="chatSheet">
+      <div id="chatHead">
+        <span>✨ Ask Cortex</span>
+        <div class="grp">
+          <button class="smallBtn" id="btnClearChat">Clear</button>
+          <button class="smallBtn" id="btnCloseChat">✕</button>
+        </div>
+      </div>
+      <div id="chatProgress">
+        <div id="chatProgressText">Loading model...</div>
+        <div class="bar"><div id="chatProgressBar"></div></div>
+      </div>
+      <div id="chatMessages"></div>
+      <div id="chatQuickBar">
+        <div class="quickChip" id="quickSummarize">Summarize this note</div>
+        <div class="quickChip" id="quickExplain">Explain the key ideas</div>
+        <div class="quickChip" id="quickQuestions">Suggest follow-up questions</div>
+      </div>
+      <div id="chatInputBar">
+        <textarea id="chatInput" placeholder="Ask anything about this note..." rows="1"></textarea>
+        <button id="btnSend" class="primaryBtn" disabled>Send</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -226,7 +331,7 @@ body{
 "use strict";
 
 /* ============================================================
-   1. IndexedDB WRAPPER
+   1. IndexedDB
    ============================================================ */
 
 const DB_NAME = 'cortex-db';
@@ -251,7 +356,6 @@ function getDB(){
   }
   return dbPromise;
 }
-
 async function dbGetAll(){
   const d = await getDB();
   return new Promise((resolve, reject) => {
@@ -261,7 +365,6 @@ async function dbGetAll(){
     req.onerror = () => reject(req.error);
   });
 }
-
 async function dbPut(note){
   const d = await getDB();
   return new Promise((resolve, reject) => {
@@ -271,7 +374,6 @@ async function dbPut(note){
     tx.onerror = () => reject(tx.error);
   });
 }
-
 async function dbDelete(id){
   const d = await getDB();
   return new Promise((resolve, reject) => {
@@ -283,36 +385,52 @@ async function dbDelete(id){
 }
 
 /* ============================================================
-   2. STATE
+   2. State
    ============================================================ */
 
 let notes = [];
 let activeId = null;
 let view = 'edit';
 
+let chatHistory = [];        // { role, content }
+let chatLoading = false;
+let generating = false;
+let llmEngine = null;
+let llmLoadingPromise = null;
+
+const MODEL_ID = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
+
 /* ============================================================
    3. DOM
    ============================================================ */
 
-const editor      = document.getElementById('editor');
-const preview     = document.getElementById('preview');
-const titleInput  = document.getElementById('titleInput');
-const noteList    = document.getElementById('noteList');
-const searchBox   = document.getElementById('searchBox');
-const sidebar     = document.getElementById('sidebar');
-const scrim       = document.getElementById('scrim');
-const linkSuggest = document.getElementById('linkSuggest');
-const backlinksBar= document.getElementById('backlinksBar');
+const editor       = document.getElementById('editor');
+const preview      = document.getElementById('preview');
+const titleInput   = document.getElementById('titleInput');
+const noteList     = document.getElementById('noteList');
+const searchBox    = document.getElementById('searchBox');
+const sidebar      = document.getElementById('sidebar');
+const scrim        = document.getElementById('scrim');
+const linkSuggest  = document.getElementById('linkSuggest');
+const backlinksBar = document.getElementById('backlinksBar');
+
+const chatSheet    = document.getElementById('chatSheet');
+const chatScrim    = document.getElementById('chatScrim');
+const chatMessages = document.getElementById('chatMessages');
+const chatInput    = document.getElementById('chatInput');
+const btnSend      = document.getElementById('btnSend');
+const chatProgress = document.getElementById('chatProgress');
+const chatProgressText = document.getElementById('chatProgressText');
+const chatProgressBar  = document.getElementById('chatProgressBar');
 
 /* ============================================================
-   4. HELPERS
+   4. Helpers
    ============================================================ */
 
 function uid(){
   if (crypto && crypto.randomUUID) return crypto.randomUUID();
   return 'n_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
-
 function formatTime(ts){
   const diff = (Date.now() - ts) / 1000;
   if (diff < 60) return 'just now';
@@ -321,18 +439,14 @@ function formatTime(ts){
   if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
   return new Date(ts).toLocaleDateString();
 }
-
 function activeNote(){
   return notes.find(n => n.id === activeId) || null;
 }
-
 function escapeHTML(s){
   return String(s).replace(/[&<>"']/g, c =>
     c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' :
     c === '"' ? '&quot;' : '&#39;');
 }
-
-/* Minimal sanitizer — removes dangerous HTML from markdown output. */
 function sanitizeHTML(html){
   html = html.replace(/<\s*\/?\s*(script|style|iframe|object|embed|link|meta|base)\b[^>]*>/gi, '');
   html = html.replace(/\son\w+\s*=\s*"[^"]*"/gi, '');
@@ -344,10 +458,12 @@ function sanitizeHTML(html){
 }
 
 /* ============================================================
-   5. WIKI LINK PARSING
+   5. Wiki links
    ============================================================ */
 
 const WIKI_RE = /\[\[([^\[\]|]+?)(?:\|([^\[\]]+?))?\]\]/g;
+const STASH_OPEN  = '\u0001';
+const STASH_CLOSE = '\u0002';
 
 function extractWikiLinks(body){
   const out = [];
@@ -361,53 +477,26 @@ function extractWikiLinks(body){
   }
   return out;
 }
-
 function noteByTitle(title){
   if (!title) return null;
   const t = title.toLowerCase();
   return notes.find(n => (n.title || '').toLowerCase() === t) || null;
 }
-
-/* Convert [[Target]] / [[Target|Display]] into standard markdown links
-   with a custom scheme, so marked w */
-   /* Sentinel characters that won't appear in normal text.
-   Using control characters avoids any collision with user content. */
-const STASH_OPEN  = '\u0001';
-const STASH_CLOSE = '\u0002';
-
 function preprocessWikiLinks(md){
   const stash = [];
-  const store = (m) => {
-    stash.push(m);
-    return STASH_OPEN + (stash.length - 1) + STASH_CLOSE;
-  };
-
+  const store = (m) => { stash.push(m); return STASH_OPEN + (stash.length - 1) + STASH_CLOSE; };
   let s = md;
-
-  // 1. Stash fenced code blocks first (``` ... ```).
-  //    Must be before inline code, because a fence contains backticks.
   s = s.replace(/```[\s\S]*?```/g, store);
-
-  // 2. Stash inline code spans (` ... `).
   s = s.replace(/`[^`\n]*`/g, store);
-
-  // 3. Now it's safe to convert wiki links. No real code remains.
   s = s.replace(WIKI_RE, (_, target, display) => {
     const t = target.trim();
     const d = (display || target).trim();
     if (!t) return _;
     return '[' + d + '](wiki://' + encodeURIComponent(t) + ')';
   });
-
-  // 4. Restore the stashed code verbatim.
-  s = s.replace(
-    new RegExp(STASH_OPEN + '(\\d+)' + STASH_CLOSE, 'g'),
-    (_, i) => stash[+i]
-  );
-
+  s = s.replace(new RegExp(STASH_OPEN + '(\\d+)' + STASH_CLOSE, 'g'), (_, i) => stash[+i]);
   return s;
 }
-
 function styleWikiLinks(){
   const anchors = preview.querySelectorAll('a[href^="wiki://"]');
   for (const a of anchors){
@@ -419,7 +508,7 @@ function styleWikiLinks(){
 }
 
 /* ============================================================
-   6. SIDEBAR / NOTE LIST
+   6. Sidebar
    ============================================================ */
 
 function renderNoteList(){
@@ -432,7 +521,6 @@ function renderNoteList(){
     : sorted;
 
   noteList.textContent = '';
-
   for (const n of filtered){
     const item = document.createElement('div');
     item.className = 'noteItem' + (n.id === activeId ? ' active' : '');
@@ -447,7 +535,6 @@ function renderNoteList(){
     time.textContent = formatTime(n.updated);
     meta.appendChild(time);
 
-    // Backlink count badge
     const bl = findBacklinks(n.id);
     if (bl.length){
       const badge = document.createElement('span');
@@ -458,11 +545,9 @@ function renderNoteList(){
 
     item.appendChild(title);
     item.appendChild(meta);
-
     item.addEventListener('click', () => switchNote(n.id));
     noteList.appendChild(item);
   }
-
   if (!filtered.length){
     const empty = document.createElement('div');
     empty.className = 'emptyNote';
@@ -470,18 +555,11 @@ function renderNoteList(){
     noteList.appendChild(empty);
   }
 }
-
-function openSidebar(){
-  sidebar.classList.add('open');
-  scrim.classList.add('show');
-}
-function closeSidebar(){
-  sidebar.classList.remove('open');
-  scrim.classList.remove('show');
-}
+function openSidebar(){ sidebar.classList.add('open'); scrim.classList.add('show'); }
+function closeSidebar(){ sidebar.classList.remove('open'); scrim.classList.remove('show'); }
 
 /* ============================================================
-   7. BACKLINKS
+   7. Backlinks
    ============================================================ */
 
 function findBacklinks(noteId){
@@ -489,14 +567,12 @@ function findBacklinks(noteId){
   if (!note) return [];
   const title = (note.title || '').toLowerCase();
   if (!title || title === 'untitled') return [];
-
   const out = [];
   for (const other of notes){
     if (other.id === noteId) continue;
     const links = extractWikiLinks(other.body || '');
     if (links.some(l => l.target.toLowerCase() === title)) out.push(other);
   }
-  // Most recent first
   return out.sort((a, b) => b.updated - a.updated);
 }
 
@@ -505,14 +581,11 @@ function renderBacklinks(){
   if (!n){ backlinksBar.style.display = 'none'; return; }
   const bl = findBacklinks(n.id);
   if (!bl.length){ backlinksBar.style.display = 'none'; return; }
-
   backlinksBar.textContent = '';
-
   const label = document.createElement('span');
   label.id = 'backlinksLabel';
   label.textContent = 'Linked from';
   backlinksBar.appendChild(label);
-
   for (const other of bl){
     const chip = document.createElement('div');
     chip.className = 'backlinkChip';
@@ -524,7 +597,7 @@ function renderBacklinks(){
 }
 
 /* ============================================================
-   8. NOTE CRUD
+   8. Note CRUD
    ============================================================ */
 
 async function saveNote(){
@@ -533,13 +606,8 @@ async function saveNote(){
   n.title = titleInput.value.trim() || 'Untitled';
   n.body  = editor.value;
   n.updated = Date.now();
-  try {
-    await dbPut(n);
-  } catch(e){
-    console.warn('Save failed:', e);
-  }
+  try { await dbPut(n); } catch(e){}
 }
-
 let saveTimer = null;
 function scheduleSave(){
   clearTimeout(saveTimer);
@@ -550,7 +618,6 @@ function scheduleSave(){
     if (view === 'preview') updatePreview();
   }, 400);
 }
-
 async function switchNote(id){
   if (id === activeId){ closeSidebar(); return; }
   await saveNote();
@@ -566,7 +633,6 @@ async function switchNote(id){
   if (view === 'preview') updatePreview();
   if (window.innerWidth <= 700) closeSidebar();
 }
-
 async function createNote(initialTitle, initialBody){
   await saveNote();
   const n = {
@@ -588,20 +654,14 @@ async function createNote(initialTitle, initialBody){
   else editor.focus();
   return n;
 }
-
 async function deleteActiveNote(){
   const n = activeNote();
   if (!n) return;
   const label = n.title && n.title !== 'Untitled' ? '"' + n.title + '"' : 'this note';
   if (!confirm('Delete ' + label + '? This cannot be undone.')) return;
-
   try { await dbDelete(n.id); } catch(e){}
   notes = notes.filter(x => x.id !== n.id);
-
-  if (!notes.length){
-    await createNote();
-    return;
-  }
+  if (!notes.length){ await createNote(); return; }
   const next = [...notes].sort((a, b) => b.updated - a.updated)[0];
   activeId = next.id;
   titleInput.value = next.title === 'Untitled' ? '' : (next.title || '');
@@ -613,27 +673,16 @@ async function deleteActiveNote(){
 }
 
 /* ============================================================
-   9. WIKI LINK NAVIGATION
+   9. Wiki link navigation + autocomplete
    ============================================================ */
 
 async function navigateToWikiLink(target){
   const existing = noteByTitle(target);
-  if (existing){
-    await switchNote(existing.id);
-    return;
-  }
-  // Create it
+  if (existing){ await switchNote(existing.id); return; }
   const n = await createNote(target, '');
-  // Keep view as-is; if preview, switch back to edit so they can write
   if (view === 'preview') setView('edit');
   editor.focus();
 }
-
-/* ============================================================
-   10. LINK AUTOCOMPLETE
-   ============================================================ */
-
-/* Detect a `[[` typed before the caret with no closing `]]` */
 function checkLinkAutocomplete(){
   const pos = editor.selectionStart;
   if (pos !== editor.selectionEnd) return null;
@@ -642,13 +691,10 @@ function checkLinkAutocomplete(){
   if (!m) return null;
   return { query: m[1], start: pos - m[0].length };
 }
-
 function renderLinkSuggest(){
   const ctx = checkLinkAutocomplete();
   if (!ctx){ linkSuggest.style.display = 'none'; return; }
-
   const q = ctx.query.trim().toLowerCase();
-
   let matches = notes
     .filter(n => n.id !== activeId)
     .filter(n => {
@@ -666,7 +712,6 @@ function renderLinkSuggest(){
     .slice(0, 10);
 
   linkSuggest.textContent = '';
-
   for (const n of matches){
     const title = n.title || 'Untitled';
     const chip = document.createElement('div');
@@ -675,8 +720,6 @@ function renderLinkSuggest(){
     chip.addEventListener('click', () => insertLinkSuggestion(ctx, title));
     linkSuggest.appendChild(chip);
   }
-
-  // Offer to create a new note if nothing matches exactly
   const trimmed = ctx.query.trim();
   if (trimmed && !matches.some(n => (n.title || '').toLowerCase() === q)){
     const chip = document.createElement('div');
@@ -685,10 +728,8 @@ function renderLinkSuggest(){
     chip.addEventListener('click', () => insertLinkSuggestion(ctx, trimmed));
     linkSuggest.appendChild(chip);
   }
-
   linkSuggest.style.display = (matches.length || trimmed) ? 'flex' : 'none';
 }
-
 function replaceFromTo(start, end, text){
   const v = editor.value;
   editor.value = v.slice(0, start) + text + v.slice(end);
@@ -697,7 +738,6 @@ function replaceFromTo(start, end, text){
   editor.focus();
   scheduleSave();
 }
-
 function insertLinkSuggestion(ctx, title){
   const insert = '[[' + title + ']]';
   replaceFromTo(ctx.start, editor.selectionStart, insert);
@@ -705,13 +745,12 @@ function insertLinkSuggestion(ctx, title){
 }
 
 /* ============================================================
-   11. PREVIEW
+   10. Preview
    ============================================================ */
 
 if (window.marked && window.marked.use){
   window.marked.use({ breaks: true, gfm: true });
 }
-
 function updatePreview(){
   if (view !== 'preview') return;
   const md = preprocessWikiLinks(editor.value);
@@ -726,7 +765,6 @@ function updatePreview(){
   preview.innerHTML = sanitizeHTML(html);
   styleWikiLinks();
 }
-
 function setView(v){
   view = v;
   const btn = document.getElementById('btnPreview');
@@ -743,8 +781,6 @@ function setView(v){
     editor.focus();
   }
 }
-
-/* Click handling for wiki links inside preview */
 preview.addEventListener('click', (e) => {
   const a = e.target.closest('a[data-wiki-target]');
   if (!a) return;
@@ -754,7 +790,198 @@ preview.addEventListener('click', (e) => {
 });
 
 /* ============================================================
-   12. EVENTS
+   11. Chat — WebLLM
+   ============================================================ */
+
+function openChat(){
+  chatSheet.classList.add('open');
+  chatScrim.classList.add('show');
+  // Lazily start the model load the first time the sheet opens.
+  if (!llmEngine && !llmLoadingPromise){
+    startEngineLoad();
+  }
+  setTimeout(() => chatInput.focus(), 250);
+}
+function closeChat(){
+  chatSheet.classList.remove('open');
+  chatScrim.classList.remove('show');
+}
+chatScrim.addEventListener('click', closeChat);
+document.getElementById('btnCloseChat').addEventListener('click', closeChat);
+document.getElementById('btnClearChat').addEventListener('click', () => {
+  chatHistory = [];
+  chatMessages.textContent = '';
+  appendMessage('system', 'Chat cleared.');
+});
+
+function appendMessage(role, text){
+  const el = document.createElement('div');
+  el.className = 'msg ' + role;
+  el.textContent = text;
+  chatMessages.appendChild(el);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return el;
+}
+
+function showChatProgress(text, fraction){
+  chatProgress.style.display = 'block';
+  chatProgressText.textContent = text || 'Loading...';
+  if (typeof fraction === 'number'){
+    chatProgressBar.style.width = Math.round(fraction * 100) + '%';
+  }
+}
+function hideChatProgress(){
+  chatProgress.style.display = 'none';
+  chatProgressBar.style.width = '0%';
+}
+
+async function startEngineLoad(){
+  if (llmEngine) return llmEngine;
+  if (llmLoadingPromise) return llmLoadingPromise;
+
+  if (!('gpu' in navigator)){
+    appendMessage('system',
+      '⚠ WebGPU is not available in this browser. Update Chrome to the latest version, then reopen. Cortex works without AI; this panel just won\'t respond.');
+    chatInput.disabled = true;
+    btnSend.disabled = true;
+    return null;
+  }
+
+  showChatProgress('Downloading model (~700 MB). This happens once.', 0);
+
+  llmLoadingPromise = (async () => {
+    try {
+      // Dynamic import — pulls WebLLM from jsDelivr's ESM proxy.
+      const webllm = await import('https://esm.run/@mlc-ai/web-llm');
+
+      const engine = await webllm.CreateMLCEngine(MODEL_ID, {
+        initProgressCallback: (report) => {
+          const text = report && report.text ? report.text : 'Loading...';
+          showChatProgress(text, report && report.progress);
+        },
+      });
+
+      llmEngine = engine;
+      hideChatProgress();
+      chatInput.disabled = false;
+      btnSend.disabled = false;
+      appendMessage('system', '✓ Model ready. Ask anything about this note.');
+      return engine;
+    } catch(err){
+      hideChatProgress();
+      appendMessage('system', '⚠ Could not load model: ' + (err && err.message ? err.message : err));
+      chatInput.disabled = true;
+      btnSend.disabled = true;
+      llmLoadingPromise = null;
+      return null;
+    }
+  })();
+
+  return llmLoadingPromise;
+}
+
+function buildMessages(){
+  const msgs = [];
+  const note = activeNote();
+
+  let system = 'You are Cortex, a helpful AI assistant built into a note-taking app. Answer concisely and helpfully.';
+  if (note){
+    const title = note.title || 'Untitled';
+    const body = (note.body || '').trim();
+    system +=
+      '\n\nThe user is currently viewing a note titled "' + title + '". Here is its full content:\n\n' +
+      '---\n' + (body || '(empty note)') + '\n---\n\n' +
+      'Answer questions about this note. If they ask something unrelated, still help, but keep it brief.';
+  }
+
+  msgs.push({ role: 'system', content: system });
+  for (const m of chatHistory){
+    msgs.push({ role: m.role, content: m.content });
+  }
+  return msgs;
+}
+
+async function sendMessage(text){
+  if (generating || !llmEngine) return;
+  text = (text || '').trim();
+  if (!text) return;
+
+  generating = true;
+  btnSend.disabled = true;
+  chatInput.disabled = true;
+
+  chatHistory.push({ role: 'user', content: text });
+  appendMessage('user', text);
+  chatInput.value = '';
+  chatInput.style.height = '';
+
+  const assistantEl = appendMessage('assistant', '…');
+
+  try {
+    const chunks = await llmEngine.chat.completions.create({
+      messages: buildMessages(),
+      temperature: 0.7,
+      stream: true,
+    });
+
+    let full = '';
+    let first = true;
+    for await (const chunk of chunks){
+      const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta
+        ? (chunk.choices[0].delta.content || '')
+        : '';
+      if (!delta) continue;
+      if (first){ assistantEl.textContent = ''; first = false; }
+      full += delta;
+      assistantEl.textContent = full;
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    if (first) assistantEl.textContent = '(no response)';
+    chatHistory.push({ role: 'assistant', content: full });
+  } catch(err){
+    assistantEl.textContent = '⚠ Error: ' + (err && err.message ? err.message : err);
+    assistantEl.classList.add('error');
+  } finally {
+    generating = false;
+    btnSend.disabled = false;
+    chatInput.disabled = false;
+    chatInput.focus();
+  }
+}
+
+btnSend.addEventListener('click', () => sendMessage(chatInput.value));
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey){
+    e.preventDefault();
+    sendMessage(chatInput.value);
+  }
+});
+chatInput.addEventListener('input', () => {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+});
+
+document.getElementById('btnChat').addEventListener('click', () => {
+  if (chatSheet.classList.contains('open')) closeChat();
+  else openChat();
+});
+
+/* Quick prompts */
+document.getElementById('quickSummarize').addEventListener('click', () => {
+  chatInput.value = 'Summarize this note in 3 sentences.';
+  chatInput.focus();
+});
+document.getElementById('quickExplain').addEventListener('click', () => {
+  chatInput.value = 'Explain the key ideas in this note in simple terms.';
+  chatInput.focus();
+});
+document.getElementById('quickQuestions').addEventListener('click', () => {
+  chatInput.value = 'Suggest 5 follow-up questions I should investigate based on this note.';
+  chatInput.focus();
+});
+
+/* ============================================================
+   12. Events
    ============================================================ */
 
 editor.addEventListener('input', () => {
@@ -762,7 +989,6 @@ editor.addEventListener('input', () => {
   renderLinkSuggest();
   if (view === 'preview') updatePreview();
 });
-
 titleInput.addEventListener('input', scheduleSave);
 searchBox.addEventListener('input', renderNoteList);
 searchBox.addEventListener('search', renderNoteList);
@@ -777,7 +1003,6 @@ document.getElementById('btnSidebar').addEventListener('click', () => {
 });
 scrim.addEventListener('click', closeSidebar);
 
-/* Escape closes suggestions first, then sidebar */
 editor.addEventListener('keydown', (e) => {
   if (e.key === 'Escape'){
     if (linkSuggest.style.display !== 'none'){
@@ -786,8 +1011,6 @@ editor.addEventListener('keydown', (e) => {
       return;
     }
   }
-  // Ctrl/Cmd+Enter as a shortcut to insert a wiki link bracket
-  // (nice-to-have on tablets)
   if ((e.ctrlKey || e.metaKey) && e.key === 'l'){
     e.preventDefault();
     const pos = editor.selectionStart;
@@ -797,14 +1020,20 @@ editor.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'n'){
-    e.preventDefault(); createNote();
-  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n'){ e.preventDefault(); createNote(); }
   if ((e.ctrlKey || e.metaKey) && e.key === 'e'){
     e.preventDefault();
     setView(view === 'edit' ? 'preview' : 'edit');
   }
-  if (e.key === 'Escape') closeSidebar();
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k'){
+    e.preventDefault();
+    if (chatSheet.classList.contains('open')) closeChat();
+    else openChat();
+  }
+  if (e.key === 'Escape'){
+    closeSidebar();
+    if (chatSheet.classList.contains('open')) closeChat();
+  }
   if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace'){
     if (document.activeElement !== editor && document.activeElement !== titleInput){
       e.preventDefault(); deleteActiveNote();
@@ -822,7 +1051,7 @@ window.addEventListener('beforeunload', () => {
 });
 
 /* ============================================================
-   13. VIEWPORT
+   13. Viewport
    ============================================================ */
 
 function updateViewport(){
@@ -841,15 +1070,11 @@ window.addEventListener('orientationchange', () => setTimeout(updateViewport, 25
 updateViewport();
 
 /* ============================================================
-   14. INIT
+   14. Init
    ============================================================ */
 
 async function init(){
-  try {
-    notes = await dbGetAll();
-  } catch(e){
-    notes = [];
-  }
+  try { notes = await dbGetAll(); } catch(e){ notes = []; }
 
   if (!notes.length){
     const a = {
@@ -858,11 +1083,9 @@ async function init(){
       body:
         '# Welcome to Cortex\n\n' +
         'This is a note. It links to another note: [[How wiki links work]].\n\n' +
-        'Tap **Preview** (or press Ctrl+E) to see the link render.\n\n' +
-        '## Multiple notes, one graph\n\n' +
-        'Every note can link to any other. Backlinks appear at the bottom ' +
-        'of the note they point to. Try it: create a new note and link it ' +
-        'from this one with `[[Its Title]]`.\n',
+        'Tap **Preview** (or press Ctrl+E) to see the link render. Then tap **✨** in the top bar to ask the AI about this note.\n\n' +
+        '## The AI runs on your device\n\n' +
+        'The first time you open the chat, Cortex downloads a small language model (about 700 MB). After that, it works offline. Nothing is sent to any server.\n',
       created: Date.now(),
       updated: Date.now(),
     };
@@ -871,16 +1094,14 @@ async function init(){
       title: 'How wiki links work',
       body:
         '## Wiki links\n\n' +
-        'Type `[[` in the editor and a suggestion bar appears. Keep typing ' +
-        'to filter, or tap a title to insert it.\n\n' +
+        'Type `[[` in the editor and a suggestion bar appears. Keep typing to filter, or tap a title to insert it.\n\n' +
         'Formats supported:\n\n' +
         '- `[[Some Note]]` — links to "Some Note", displays as "Some Note"\n' +
         '- `[[Some Note|display text]]` — links to "Some Note", displays as "display text"\n' +
         '- Matching is case-insensitive\n' +
         '- If the target note doesn\'t exist, clicking the link creates it\n\n' +
         '## Backlinks\n\n' +
-        'Open "Welcome to Cortex" and you\'ll see a strip at the bottom ' +
-        'saying "Linked from" with a chip pointing back here.\n',
+        'Open "Welcome to Cortex" and you\'ll see a strip at the bottom saying "Linked from" with a chip pointing back here.\n',
       created: Date.now(),
       updated: Date.now(),
     };
@@ -903,7 +1124,7 @@ async function init(){
 init();
 
 /* ============================================================
-   15. SERVICE WORKER
+   15. Service worker
    ============================================================ */
 
 if ('serviceWorker' in navigator){
