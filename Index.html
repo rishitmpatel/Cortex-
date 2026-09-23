@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1e1e1e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Cortex — Notes</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-title" content="Cortex">
+<style>
+:root{
+  --bg:#1e1e1e; --panel:#252526; --panel2:#2d2d2d; --line:#3c3c3c;
+  --text:#d4d4d4; --muted:#858585; --accent:#a78bfa;
+  --btn:#7c3aed; --hover:#2a2a2a;
+  --md-heading:#569cd6; --md-link:#4ec9b0; --md-code:#ce9178;
+  --md-quote:#6a9955; --md-rule:#3c3c3c;
+  --fs:16px; --vvh:100dvh; --vvt:0px;
+  --sidebar-width:260px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--bg);}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:var(--text);font-size:15px;
+  position:fixed;inset:0;overscroll-behavior:none;
+}
+#app{position:fixed;left:0;right:0;top:var(--vvt);height:var(--vvh);
+  display:flex;flex-direction:column;background:var(--bg);}
+
+/* ---- top bar ---- */
+#topbar{flex:0 0 auto;height:50px;display:flex;align-items:center;gap:8px;
+  padding:0 8px 0 8px;background:var(--panel);border-bottom:1px solid var(--line);}
+#brand{font-weight:600;font-size:15px;flex:1;text-align:center;color:#cccccc;}
+#brand em{font-style:normal;color:var(--accent);}
+.iconBtn{background:transparent;border:none;color:var(--text);
+  width:40px;height:38px;border-radius:6px;font-size:18px;cursor:pointer;padding:0;}
+.iconBtn:active{background:var(--hover);}
+.textBtn{background:var(--panel2);border:1px solid var(--line);color:var(--text);
+  height:34px;padding:0 12px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:500;}
+.textBtn:active{background:var(--btn);color:#fff;border-color:var(--btn);}
+.primaryBtn{background:var(--btn);border:none;color:#fff;
+  height:34px;padding:0 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;}
+.primaryBtn:active{opacity:.85;}
+
+/* ---- main layout ---- */
+#main{flex:1 1 auto;display:flex;min-height:0;position:relative;}
+
+/* ---- sidebar ---- */
+#sidebar{
+  width:var(--sidebar-width);flex:0 0 auto;
+  background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;
+  transition:transform .2s ease;
+}
+#searchWrap{padding:8px;flex:0 0 auto;border-bottom:1px solid var(--line);}
+#searchBox{
+  width:100%;padding:8px 10px;background:var(--panel2);color:var(--text);
+  border:1px solid var(--line);border-radius:6px;font-family:inherit;
+  font-size:14px;outline:none;
+}
+#searchBox:focus{border-color:var(--accent);}
+#noteList{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.noteItem{
+  padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;
+  user-select:none;-webkit-user-select:none;
+}
+.noteItem:hover{background:var(--hover);}
+.noteItem.active{background:var(--panel2);border-left:3px solid var(--accent);padding-left:9px;}
+.noteTitle{font-size:14px;font-weight:500;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.noteMeta{font-size:11px;color:var(--muted);margin-top:3px;}
+.emptyNote{padding:20px 12px;color:var(--muted);font-size:13px;text-align:center;}
+
+/* ---- editor pane ---- */
+#editorPane{flex:1 1 auto;display:flex;flex-direction:column;
+  min-height:0;min-width:0;background:var(--bg);}
+#titleInput{
+  flex:0 0 auto;width:100%;border:none;outline:none;
+  background:transparent;color:var(--text);
+  font-family:inherit;font-size:22px;font-weight:600;
+  padding:14px 18px 8px 18px;
+  border-bottom:1px solid var(--line);
+}
+#titleInput::placeholder{color:var(--muted);}
+#editorArea{flex:1 1 auto;position:relative;min-height:0;}
+#editor{
+  position:absolute;inset:0;width:100%;height:100%;
+  border:none;outline:none;resize:none;
+  background:var(--bg);color:var(--text);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:var(--fs);line-height:1.6;
+  padding:16px 18px;tab-size:4;
+  -webkit-overflow-scrolling:touch;
+}
+#preview{
+  position:absolute;inset:0;width:100%;height:100%;
+  overflow-y:auto;padding:16px 18px;display:none;
+  -webkit-overflow-scrolling:touch;line-height:1.65;
+}
+#preview h1,#preview h2,#preview h3{color:var(--md-heading);margin-top:1.2em;margin-bottom:.5em;}
+#preview h1{font-size:1.7em;border-bottom:1px solid var(--md-rule);padding-bottom:.3em;}
+#preview h2{font-size:1.35em;border-bottom:1px solid var(--md-rule);padding-bottom:.2em;}
+#preview h3{font-size:1.15em;color:var(--md-heading);}
+#preview a{color:var(--md-link);text-decoration:none;}
+#preview a:active{text-decoration:underline;}
+#preview code{background:var(--panel2);padding:2px 5px;border-radius:3px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;color:var(--md-code);}
+#preview pre{background:var(--panel2);padding:12px;border-radius:6px;overflow-x:auto;}
+#preview pre code{background:transparent;padding:0;color:var(--text);}
+#preview blockquote{border-left:3px solid var(--md-quote);margin:0;
+  padding:0 12px;color:var(--muted);}
+#preview ul,#preview ol{padding-left:1.5em;}
+#preview hr{border:none;border-top:1px solid var(--md-rule);}
+#preview img{max-width:100%;}
+#preview table{border-collapse:collapse;}
+#preview th,#preview td{border:1px solid var(--line);padding:6px 10px;}
+
+/* ---- scrim for mobile sidebar ---- */
+#scrim{position:absolute;inset:0;background:rgba(0,0,0,.5);
+  opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;}
+#scrim.show{opacity:1;pointer-events:auto;}
+
+/* ---- mobile ---- */
+@media (max-width: 700px){
+  #sidebar{
+    position:absolute;left:0;top:0;bottom:0;width:280px;z-index:100;
+    transform:translateX(-100%);
+  }
+  #sidebar.open{transform:translateX(0);}
+  #brand{text-align:left;padding-left:6px;}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header id="topbar">
+    <button id="btnSidebar" class="iconBtn" title="Notes">☰</button>
+    <div id="brand">Cortex <em>✎</em></div>
+    <button id="btnPreview" class="textBtn" title="Toggle preview">Preview</button>
+    <button id="btnNew" class="primaryBtn" title="New note">+ New</button>
+  </header>
+
+  <div id="main">
+    <aside id="sidebar">
+      <div id="searchWrap">
+        <input id="searchBox" type="search" placeholder="Search notes..." autocomplete="off">
+      </div>
+      <div id="noteList"></div>
+    </aside>
+    <section id="editorPane">
+      <input id="titleInput" type="text" placeholder="Untitled" autocomplete="off">
+      <div id="editorArea">
+        <textarea id="editor" spellcheck="false" autocapitalize="sentences"
+          placeholder="Start writing... Markdown supported."></textarea>
+        <div id="preview"></div>
+      </div>
+    </section>
+    <div id="scrim"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<script>
+"use strict";
+
+/* ============================================================
+   1. IndexedDB WRAPPER
+   ============================================================ */
+
+const DB_NAME = 'cortex-db';
+const DB_VERSION = 1;
+const STORE = 'notes';
+
+let dbPromise = null;
+function getDB(){
+  if (!dbPromise){
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e) => {
+        const d = e.target.result;
+        if (!d.objectStoreNames.contains(STORE)){
+          const s = d.createObjectStore(STORE, { keyPath: 'id' });
+          s.createIndex('updated', 'updated');
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  return dbPromise;
+}
+
+async function dbGetAll(){
+  const d = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = d.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbPut(note){
+  const d = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = d.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(note);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function dbDelete(id){
+  const d = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = d.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/* ============================================================
+   2. STATE
+   ============================================================ */
+
+let notes = [];          // array of { id, title, body, created, updated }
+let activeId = null;
+let view = 'edit';       // 'edit' or 'preview'
+
+/* ============================================================
+   3. DOM
+   ============================================================ */
+
+const editor       = document.getElementById('editor');
+const preview      = document.getElementById('preview');
+const titleInput   = document.getElementById('titleInput');
+const noteList     = document.getElementById('noteList');
+const searchBox    = document.getElementById('searchBox');
+const sidebar      = document.getElementById('sidebar');
+const scrim        = document.getElementById('scrim');
+
+/* ============================================================
+   4. HELPERS
+   ============================================================ */
+
+function uid(){
+  if (crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'n_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+function formatTime(ts){
+  const diff = (Date.now() - ts) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+  return new Date(ts).toLocaleDateString();
+}
+
+function activeNote(){
+  return notes.find(n => n.id === activeId) || null;
+}
+
+/* Minimal sanitizer — removes the dangerous bits of rendered markdown.
+   For a public release this should be DOMPurify, but for personal use
+   this catches the realistic attack vectors. */
+function sanitizeHTML(html){
+  html = html.replace(/<\s*\/?\s*(script|style|iframe|object|embed|link|meta)\b[^>]*>/gi, '');
+  html = html.replace(/\son\w+\s*=\s*"[^"]*"/gi, '');
+  html = html.replace(/\son\w+\s*=\s*'[^']*'/gi, '');
+  html = html.replace(/\son\w+\s*=\s*[^\s>]+/gi, '');
+  html = html.replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"');
+  html = html.replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'");
+  return html;
+}
+
+/* ============================================================
+   5. SIDEBAR / NOTE LIST
+   ============================================================ */
+
+function renderNoteList(){
+  const q = searchBox.value.trim().toLowerCase();
+  const sorted = [...notes].sort((a, b) => b.updated - a.updated);
+  const filtered = q
+    ? sorted.filter(n =>
+        (n.title || '').toLowerCase().includes(q) ||
+        (n.body  || '').toLowerCase().includes(q))
+    : sorted;
+
+  noteList.textContent = '';
+
+  for (const n of filtered){
+    const item = document.createElement('div');
+    item.className = 'noteItem' + (n.id === activeId ? ' active' : '');
+
+    const title = document.createElement('div');
+    title.className = 'noteTitle';
+    title.textContent = n.title || 'Untitled';
+
+    const meta = document.createElement('div');
+    meta.className = 'noteMeta';
+    meta.textContent = formatTime(n.updated);
+
+    item.appendChild(title);
+    item.appendChild(meta);
+
+    item.addEventListener('click', () => switchNote(n.id));
+    noteList.appendChild(item);
+  }
+
+  if (!filtered.length){
+    const empty = document.createElement('div');
+    empty.className = 'emptyNote';
+    empty.textContent = q ? 'No notes match your search.' : 'No notes yet. Tap + New to create one.';
+    noteList.appendChild(empty);
+  }
+}
+
+function openSidebar(){
+  sidebar.classList.add('open');
+  scrim.classList.add('show');
+}
+function closeSidebar(){
+  sidebar.classList.remove('open');
+  scrim.classList.remove('show');
+}
+
+/* ============================================================
+   6. NOTE CRUD
+   ============================================================ */
+
+async function saveNote(){
+  const n = activeNote();
+  if (!n) return;
+  n.title = titleInput.value.trim() || 'Untitled';
+  n.body  = editor.value;
+  n.updated = Date.now();
+  try {
+    await dbPut(n);
+  } catch(e){
+    console.warn('Save failed:', e);
+  }
+}
+
+let saveTimer = null;
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    await saveNote();
+    renderNoteList();
+  }, 400);
+}
+
+async function switchNote(id){
+  if (id === activeId) { closeSidebar(); return; }
+  await saveNote();
+  activeId = id;
+  const n = activeNote();
+  if (!n) return;
+  titleInput.value = n.title === 'Untitled' ? '' : (n.title || '');
+  editor.value = n.body || '';
+  editor.scrollTop = 0;
+  renderNoteList();
+  if (view === 'preview') updatePreview();
+  if (window.innerWidth <= 700) closeSidebar();
+}
+
+async function createNote(){
+  await saveNote();
+  const n = {
+    id: uid(),
+    title: 'Untitled',
+    body: '',
+    created: Date.now(),
+    updated: Date.now(),
+  };
+  notes.push(n);
+  activeId = n.id;
+  titleInput.value = '';
+  editor.value = '';
+  renderNoteList();
+  if (view === 'preview') updatePreview();
+  titleInput.focus();
+}
+
+async function deleteActiveNote(){
+  const n = activeNote();
+  if (!n) return;
+  const label = n.title && n.title !== 'Untitled' ? '"' + n.title + '"' : 'this note';
+  if (!confirm('Delete ' + label + '? This cannot be undone.')) return;
+
+  try { await dbDelete(n.id); } catch(e){}
+  notes = notes.filter(x => x.id !== n.id);
+
+  if (!notes.length){
+    await createNote();
+  } else {
+    const next = [...notes].sort((a, b) => b.updated - a.updated)[0];
+    activeId = next.id;
+    titleInput.value = next.title === 'Untitled' ? '' : (next.title || '');
+    editor.value = next.body || '';
+    editor.scrollTop = 0;
+  }
+  renderNoteList();
+  if (view === 'preview') updatePreview();
+}
+
+/* ============================================================
+   7. PREVIEW
+   ============================================================ */
+
+function updatePreview(){
+  if (view !== 'preview') return;
+  const md = editor.value;
+  let html;
+  if (window.marked && typeof window.marked.parse === 'function'){
+    try {
+      html = window.marked.parse(md, { breaks: true, gfm: true });
+    } catch(e){
+      html = '<pre>' + md.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</pre>';
+    }
+  } else {
+    html = '<pre>' + md.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</pre>';
+  }
+  preview.innerHTML = sanitizeHTML(html);
+}
+
+function setView(v){
+  view = v;
+  const btn = document.getElementById('btnPreview');
+  if (v === 'preview'){
+    editor.style.display = 'none';
+    preview.style.display = 'block';
+    btn.textContent = 'Edit';
+    updatePreview();
+  } else {
+    editor.style.display = '';
+    preview.style.display = 'none';
+    btn.textContent = 'Preview';
+    editor.focus();
+  }
+}
+
+/* ============================================================
+   8. EVENTS
+   ============================================================ */
+
+editor.addEventListener('input', () => {
+  scheduleSave();
+  if (view === 'preview') updatePreview();
+});
+editor.addEventListener('scroll', () => {
+  // noop — reserved for future line-number sync
+}, { passive:true });
+
+titleInput.addEventListener('input', scheduleSave);
+
+searchBox.addEventListener('input', renderNoteList);
+searchBox.addEventListener('search', renderNoteList);
+
+document.getElementById('btnNew').addEventListener('click', createNote);
+document.getElementById('btnPreview').addEventListener('click', () => {
+  setView(view === 'edit' ? 'preview' : 'edit');
+});
+document.getElementById('btnSidebar').addEventListener('click', () => {
+  if (sidebar.classList.contains('open')) closeSidebar();
+  else openSidebar();
+});
+scrim.addEventListener('click', closeSidebar);
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n'){
+    e.preventDefault(); createNote();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'e'){
+    e.preventDefault();
+    setView(view === 'edit' ? 'preview' : 'edit');
+  }
+  if (e.key === 'Escape'){
+    closeSidebar();
+  }
+  // Delete active note: Ctrl/Cmd + Backspace
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace'){
+    // only if not focused in editor (so we don't clash with text deletion)
+    if (document.activeElement !== editor && document.activeElement !== titleInput){
+      e.preventDefault(); deleteActiveNote();
+    }
+  }
+});
+
+window.addEventListener('beforeunload', () => {
+  const n = activeNote();
+  if (n){
+    n.title = titleInput.value.trim() || 'Untitled';
+    n.body = editor.value;
+    n.updated = Date.now();
+    // IndexedDB is async — a best-effort synchronous flush isn't possible,
+    // so we just update the in-memory object. The autosave has already
+    // persisted the last change 400ms after the last keystroke.
+  }
+});
+
+/* ============================================================
+   9. VIEWPORT (mobile keyboard)
+   ============================================================ */
+
+function updateViewport(){
+  const vv = window.visualViewport;
+  if (!vv) return;
+  document.documentElement.style.setProperty('--vvh', vv.height + 'px');
+  document.documentElement.style.setProperty('--vvt', vv.offsetTop + 'px');
+}
+if (window.visualViewport){
+  window.visualViewport.addEventListener('resize', updateViewport);
+  window.visualViewport.addEventListener('scroll', () => {
+    updateViewport(); window.scrollTo(0, 0);
+  });
+}
+window.addEventListener('orientationchange', () => setTimeout(updateViewport, 250));
+updateViewport();
+
+/* ============================================================
+   10. INIT
+   ============================================================ */
+
+async function init(){
+  try {
+    notes = await dbGetAll();
+  } catch(e){
+    notes = [];
+  }
+
+  if (!notes.length){
+    const welcome = {
+      id: uid(),
+      title: 'Welcome to Cortex',
+      body:
+        '# Welcome to Cortex\n\n' +
+        'This is your first note. Edit it, or tap **+ New** to create another.\n\n' +
+        '## What works in this version\n\n' +
+        '- Multiple notes, auto-saved\n' +
+        '- Markdown preview (tap **Preview** or press Ctrl+E)\n' +
+        '- Search across all notes\n' +
+        '- Works offline after the first load\n' +
+        '- Installable as an app on your tablet\n\n' +
+        '## What is coming next\n\n' +
+        'Wiki links, backlinks, semantic search, and a local AI that reads your notes.\n\n' +
+        '> Everything stays on your device. Nothing is sent to a server.\n',
+      created: Date.now(),
+      updated: Date.now(),
+    };
+    notes.push(welcome);
+    try { await dbPut(welcome); } catch(e){}
+  }
+
+  const sorted = [...notes].sort((a, b) => b.updated - a.updated);
+  activeId = sorted[0].id;
+  const n = activeNote();
+  titleInput.value = n.title === 'Untitled' ? '' : (n.title || '');
+  editor.value = n.body || '';
+
+  renderNoteList();
+  setView('edit');
+  editor.focus();
+}
+
+init();
+
+/* ============================================================
+   11. SERVICE WORKER
+   ============================================================ */
+
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { scope: './' })
+      .then(() => console.log('[Cortex] Service worker active.'))
+      .catch((err) => console.warn('[Cortex] SW registration failed:', err));
+  });
+}
+</script>
+</body>
+</html>
