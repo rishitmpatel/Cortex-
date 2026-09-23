@@ -1,6 +1,6 @@
 /* Cortex service worker */
 
-const CACHE_NAME = 'cortex-v7';
+const CACHE_NAME = 'cortex-v8';
 
 const APP_SHELL = [
   './',
@@ -10,7 +10,12 @@ const APP_SHELL = [
   './icon-maskable.svg',
 ];
 
-const CDN_HOSTS = ['cdn.jsdelivr.net', 'unpkg.com'];
+const CDN_HOSTS = [
+  'cdn.jsdelivr.net',
+  'unpkg.com',
+  'huggingface.co',
+  'cas-bridge.xethub.hf.co',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -36,14 +41,18 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
 
-  if (CDN_HOSTS.includes(url.hostname)){
-    event.respondWith(cacheFirst(req));
-    return;
-  }
+  // Only cache-or-fetch for our own origin and known CDN hosts.
+  // Hugging Face model files are large and WebLLM manages its own cache —
+  // let them go straight to the network.
   if (url.origin === self.location.origin){
     event.respondWith(staleWhileRevalidate(req));
     return;
   }
+  if (url.hostname === 'cdn.jsdelivr.net' || url.hostname === 'unpkg.com'){
+    event.respondWith(cacheFirst(req));
+    return;
+  }
+  // Everything else (Hugging Face, esm.run) — pass through to the network.
 });
 
 async function cacheFirst(req){
