@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.run;
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.run;
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: https://huggingface.co https://*.huggingface.co https://*.hf.co https://raw.githubusercontent.com https://*.githubusercontent.com;
   font-src 'self';
@@ -43,6 +43,17 @@ body{
 }
 #app{position:fixed;left:0;right:0;top:var(--vvt);height:var(--vvh);
   display:flex;flex-direction:column;background:var(--bg);}
+#errBar{
+  display:none;position:fixed;left:0;right:0;top:0;z-index:9999;
+  background:#a33;color:#fff;padding:10px 12px;
+  font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.4;
+  max-height:40vh;overflow:auto;white-space:pre-wrap;word-break:break-word;
+}
+#errBar.show{display:block;}
+#errBar .close{
+  float:right;background:transparent;border:1px solid #fff;color:#fff;
+  border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;margin-left:8px;
+}
 #topbar{flex:0 0 auto;height:50px;display:flex;align-items:center;gap:5px;
   padding:0 8px;background:var(--panel);border-bottom:1px solid var(--line);}
 #brand{font-weight:600;font-size:15px;flex:1;text-align:center;color:#cccccc;
@@ -343,8 +354,6 @@ body{
 }
 #chatInput:focus{border-color:var(--accent);}
 #chatInput:disabled{opacity:.5;}
-
-/* ---- modals shared ---- */
 #modelModal,#menuModal,#syncModal{
   position:fixed;inset:0;display:none;align-items:center;justify-content:center;
   z-index:200;padding:16px;background:rgba(0,0,0,.7);
@@ -381,8 +390,6 @@ body{
 .mBadge.rec{background:var(--ok);color:#04140a;}
 .mBadge.warn{background:var(--warn);color:#2a1e00;}
 .mBadge.danger{background:var(--err);color:#fff;}
-
-/* sync modal internals */
 .syncBody{padding:4px 14px 14px;}
 .syncText{font-size:13px;line-height:1.55;color:var(--muted);margin:4px 0 12px 0;}
 .syncCode{
@@ -420,6 +427,8 @@ body{
 </head>
 <body>
 
+<div id="errBar"></div>
+
 <div id="app">
   <header id="topbar">
     <button id="btnSidebar" class="iconBtn" title="Notes">☰</button>
@@ -443,7 +452,7 @@ body{
       <div id="embedFooter" title="Tap to re-index all notes">
         <span id="embedDot"></span>
         <span id="embedStatusText">Search index: idle</span>
-        <span id="versionStamp">v15</span>
+        <span id="versionStamp">v16</span>
       </div>
     </aside>
     <section id="editorPane">
@@ -493,12 +502,45 @@ body{
 <div id="menuModal"><div id="menuCard"></div></div>
 <div id="syncModal"><div id="syncCard"></div></div>
 
+<script>
+/* ---- global error surface ---- */
+(function(){
+  var bar = document.getElementById('errBar');
+  function showErr(title, detail){
+    if (!bar) return;
+    bar.classList.add('show');
+    var close = document.createElement('button');
+    close.className = 'close';
+    close.textContent = 'Dismiss';
+    close.onclick = function(){ bar.classList.remove('show'); bar.textContent = ''; };
+    var header = document.createElement('div');
+    header.style.fontWeight = '700';
+    header.style.marginBottom = '6px';
+    header.textContent = title;
+    var body = document.createElement('div');
+    body.textContent = detail;
+    bar.innerHTML = '';
+    bar.appendChild(close);
+    bar.appendChild(header);
+    bar.appendChild(body);
+  }
+  window.addEventListener('error', function(e){
+    showErr('JavaScript error', (e.message || 'Unknown') + '\n' +
+            (e.filename || '') + ':' + (e.lineno || '?') + ':' + (e.colno || '?'));
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e.reason;
+    showErr('Unhandled promise rejection', r && r.message ? r.message : String(r));
+  });
+  window.__showErr = showErr;
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
-<script src="./sync.js"></script>
+<script src="./sync.js" onerror="window.__showErr && window.__showErr('Failed to load sync.js', 'Check that sync.js exists next to index.html in the repo.')"></script>
 <script>
 "use strict";
 
-const APP_VERSION = 'v15';
+const APP_VERSION = 'v16';
 const EXPORT_VERSION = 1;
 console.log('[Cortex] App version:', APP_VERSION);
 
@@ -507,7 +549,7 @@ const MAX_SOURCES = 2;
 const MAX_SOURCE_CHARS = 500;
 const RETRIEVAL_TIMEOUT_MS = 3000;
 const STORE_FAST_MODE = 'cortex.fastmode.v1';
-const TOMBSTONE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;   // 30 days
+const TOMBSTONE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 let fastMode = false;
 try { fastMode = localStorage.getItem(STORE_FAST_MODE) === '1'; } catch(e){}
@@ -515,7 +557,6 @@ try { fastMode = localStorage.getItem(STORE_FAST_MODE) === '1'; } catch(e){}
 /* ============================================================
    IndexedDB
    ============================================================ */
-
 const DB_NAME = 'cortex-db';
 const DB_VERSION = 2;
 const STORE = 'notes';
@@ -627,7 +668,6 @@ async function dbGetAllEmbeddings(){
 /* ============================================================
    Model catalog + device
    ============================================================ */
-
 const MODEL_CATALOG = {
   tiny:   { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',  label: 'Tiny',   subtitle: 'Qwen 2.5 · 0.5B', size: '~350 MB', desc: 'Fastest. Answers are basic.', minMemory: 0 },
   small:  { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',  label: 'Small',  subtitle: 'Llama 3.2 · 1B',  size: '~700 MB', desc: 'Balanced. Default on phones.', minMemory: 4 },
@@ -663,8 +703,7 @@ let MODEL_ID = MODEL_CATALOG[CURRENT_TIER].id;
 /* ============================================================
    State
    ============================================================ */
-
-let notes = [];              // includes tombstones
+let notes = [];
 let activeId = null;
 let view = 'edit';
 
@@ -686,7 +725,6 @@ function visibleNotes(){ return notes.filter(n => !n.deleted); }
 /* ============================================================
    DOM
    ============================================================ */
-
 const editor       = document.getElementById('editor');
 const preview      = document.getElementById('preview');
 const titleInput   = document.getElementById('titleInput');
@@ -723,7 +761,6 @@ const syncCard     = document.getElementById('syncCard');
 /* ============================================================
    Helpers
    ============================================================ */
-
 function uid(){
   if (crypto && crypto.randomUUID) return crypto.randomUUID();
   return 'n_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -777,7 +814,6 @@ function withTimeout(promise, ms, fallback){
 /* ============================================================
    Wiki links
    ============================================================ */
-
 const WIKI_RE = /\[\[([^\[\]|]+?)(?:\|([^\[\]]+?))?\]\]/g;
 const STASH_OPEN  = '\u0001';
 const STASH_CLOSE = '\u0002';
@@ -827,7 +863,6 @@ function styleWikiLinks(){
 /* ============================================================
    Embeddings
    ============================================================ */
-
 const EMBED_MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
 let embedder = null;
 let embedderLoading = null;
@@ -979,7 +1014,6 @@ async function semanticSearch(query, limit){
 /* ============================================================
    Sidebar
    ============================================================ */
-
 function updateSearchStatus(){
   const q = searchBox.value.trim();
   if (searchMode === 'keyword'){
@@ -1005,7 +1039,6 @@ function updateSearchStatus(){
   searchStatus.className = 'semantic';
   searchStatus.textContent = semanticResults.length + ' result' + (semanticResults.length === 1 ? '' : 's');
 }
-
 function renderNoteList(){
   const q = searchBox.value.trim();
   const visible = visibleNotes();
@@ -1075,7 +1108,7 @@ function renderNoteList(){
     const empty = document.createElement('div');
     empty.className = 'emptyNote';
     if (q && searchMode === 'semantic'){
-      empty.textContent = 'No notes are related to "' + q + '". Try different phrasing, or tap 🧠 to switch back to keyword mode.';
+      empty.textContent = 'No notes are related to "' + q + '".';
     } else if (q){
       empty.textContent = 'No notes match your search.';
     } else {
@@ -1085,7 +1118,6 @@ function renderNoteList(){
   }
   updateSearchStatus();
 }
-
 let semanticDebounce = null;
 async function runSemanticQuery(){
   const q = searchBox.value.trim();
@@ -1139,7 +1171,6 @@ function closeSidebar(){ sidebar.classList.remove('open'); scrim.classList.remov
 /* ============================================================
    Backlinks
    ============================================================ */
-
 function findBacklinks(noteId){
   const note = notes.find(n => n.id === noteId);
   if (!note || note.deleted) return [];
@@ -1174,9 +1205,8 @@ function renderBacklinks(){
 }
 
 /* ============================================================
-   Note CRUD (with tombstones)
+   Note CRUD
    ============================================================ */
-
 async function saveNote(){
   const n = activeNote();
   if (!n) return;
@@ -1244,7 +1274,6 @@ async function deleteActiveNote(){
   try { await dbPut(n); } catch(e){}
   try { await dbDeleteEmbedding(n.id); } catch(e){}
   await refreshEmbedCount();
-
   const remaining = visibleNotes();
   if (!remaining.length){ await createNote(); return; }
   const next = [...remaining].sort((a, b) => b.updated - a.updated)[0];
@@ -1267,9 +1296,8 @@ async function purgeOldTombstones(){
 }
 
 /* ============================================================
-   Wiki link nav + autocomplete
+   Wiki link nav
    ============================================================ */
-
 async function navigateToWikiLink(target){
   const existing = noteByTitle(target);
   if (existing){ await switchNote(existing.id); return; }
@@ -1340,7 +1368,6 @@ function insertLinkSuggestion(ctx, title){
 /* ============================================================
    Preview
    ============================================================ */
-
 if (window.marked && window.marked.use){
   window.marked.use({ breaks: true, gfm: true });
 }
@@ -1385,7 +1412,6 @@ preview.addEventListener('click', (e) => {
 /* ============================================================
    Menu modal
    ============================================================ */
-
 function openMenu(){ renderMenu(); menuModal.classList.add('open'); }
 function closeMenu(){ menuModal.classList.remove('open'); }
 menuModal.addEventListener('click', (e) => { if (e.target === menuModal) closeMenu(); });
@@ -1493,7 +1519,6 @@ document.getElementById('btnMenu').addEventListener('click', openMenu);
 /* ============================================================
    Export / Import
    ============================================================ */
-
 function exportWorkspace(){
   const payload = {
     app: 'cortex',
@@ -1592,7 +1617,6 @@ function importWorkspace(){
 /* ============================================================
    Model picker
    ============================================================ */
-
 function setModelState(state, label){
   const el = document.getElementById('modelState');
   if (!el) return;
@@ -1682,9 +1706,8 @@ async function selectModel(tier){
 }
 
 /* ============================================================
-   Chat — WebLLM + RAG
+   Chat
    ============================================================ */
-
 function updateFastChip(){
   if (fastMode) chipFast.classList.add('on');
   else chipFast.classList.remove('on');
@@ -1694,7 +1717,6 @@ chipFast.addEventListener('click', () => {
   try { localStorage.setItem(STORE_FAST_MODE, fastMode ? '1' : '0'); } catch(e){}
   updateFastChip();
 });
-
 function openChat(){
   chatSheet.classList.add('open');
   chatScrim.classList.add('show');
@@ -1828,7 +1850,7 @@ function showMemoryInfo(){
     'Model state: ' + state + '\n' +
     'Current tier: ' + CURRENT_TIER + '\n' +
     'Model ID: ' + MODEL_ID + '\n' +
-    'Fast mode: ' + (fastMode ? 'ON (no RAG)' : 'off') + '\n' +
+    'Fast mode: ' + (fastMode ? 'ON' : 'off') + '\n' +
     'Embedder: ' + emb + '\n' +
     'JS heap: ' + used + ' / ' + limit + '\n' +
     'Device memory: ' + dev + '\n' +
@@ -1959,7 +1981,6 @@ document.getElementById('quickQuestions').addEventListener('click', () => {
 /* ============================================================
    Sync
    ============================================================ */
-
 function openSyncModal(){
   renderSyncLanding();
   syncModal.classList.add('open');
@@ -1972,38 +1993,29 @@ syncModal.addEventListener('click', (e) => { if (e.target === syncModal) closeSy
 
 function renderSyncLanding(){
   syncCard.textContent = '';
-
   const head = document.createElement('div');
   head.className = 'mHead';
   head.textContent = 'Sync across devices';
   syncCard.appendChild(head);
-
   const body = document.createElement('div');
   body.className = 'syncBody';
-  body.innerHTML =
-    '<div class="syncText">' +
-    'Both devices must be on the same Wi-Fi (or same network). One hosts, one joins. ' +
-    'You will copy two codes between the devices — any app works (WhatsApp, email, AirDrop).' +
-    '</div>';
+  body.textContent = 'Both devices must be on the same Wi-Fi. One hosts, one joins. You will copy two codes between the devices — any app works.';
   syncCard.appendChild(body);
-
   syncCard.appendChild(menuItem({
     label: '📡  Host this device',
     desc: 'Generate a code to send to the other device.',
     onClick: () => startSyncHost(),
   }));
-
   syncCard.appendChild(menuItem({
     label: '📥  Join another device',
     desc: 'Enter the code from the device that is hosting.',
     onClick: () => startSyncGuest(),
   }));
-
   syncCard.appendChild(menuItem({ label: 'Cancel', onClick: closeSyncModal }));
 }
 
-/* --- progress hook --- */
-if (window.CortexSync){
+function syncCallbacksInit(){
+  if (!window.CortexSync) return;
   window.CortexSync.setNotesProvider(async () => {
     return notes.map(n => ({
       id: n.id,
@@ -2015,35 +2027,20 @@ if (window.CortexSync){
       deletedAt: n.deletedAt || null,
     }));
   });
-
-  window.CortexSync.setNotesReceiver(async (theirs) => {
-    return await mergeFromPeer(theirs);
-  });
-
-  window.CortexSync.setProgressCallback(({ state, message }) => {
-    updateSyncProgress(state, message);
-  });
-
-  window.CortexSync.setDoneCallback(({ local, remote, peerDevice }) => {
-    renderSyncDone(local, remote, peerDevice);
-  });
-
-  window.CortexSync.setErrorCallback((err) => {
-    renderSyncError(err && err.message ? err.message : String(err));
-  });
+  window.CortexSync.setNotesReceiver(async (theirs) => mergeFromPeer(theirs));
+  window.CortexSync.setProgressCallback(({ state, message }) => updateSyncProgress(state, message));
+  window.CortexSync.setDoneCallback(({ local, remote, peerDevice }) => renderSyncDone(local, remote, peerDevice));
+  window.CortexSync.setErrorCallback((err) => renderSyncError(err && err.message ? err.message : String(err)));
 }
 
 async function mergeFromPeer(theirs){
   const myMap = new Map(notes.map(n => [n.id, n]));
   let added = 0, updated = 0, deleted = 0;
-
   for (const their of theirs){
     if (!their || typeof their.id !== 'string') continue;
     const mine = myMap.get(their.id);
     const theirTime = their.deletedAt || their.updated || 0;
-
     if (!mine){
-      // New to us
       const incoming = {
         id: their.id,
         title: (typeof their.title === 'string') ? their.title.slice(0, 500) : 'Untitled',
@@ -2058,10 +2055,8 @@ async function mergeFromPeer(theirs){
       if (incoming.deleted) deleted++; else added++;
       continue;
     }
-
     const myTime = mine.deletedAt || mine.updated || 0;
     if (theirTime > myTime){
-      // Theirs is newer — replace ours
       const wasDeleted = !!mine.deleted;
       mine.title = (typeof their.title === 'string') ? their.title.slice(0, 500) : mine.title;
       mine.body = (typeof their.body === 'string') ? their.body.slice(0, 5 * 1024 * 1024) : mine.body;
@@ -2078,13 +2073,10 @@ async function mergeFromPeer(theirs){
       }
     }
   }
-
   await refreshEmbedCount();
   renderNoteList();
   renderBacklinks();
   if (view === 'preview') updatePreview();
-
-  // If our active note got deleted by the merge, pick a new one
   const active = activeNote();
   if (!active){
     const vis = visibleNotes();
@@ -2098,34 +2090,27 @@ async function mergeFromPeer(theirs){
       await createNote();
     }
   }
-
   return { added, updated, deleted, total: visibleNotes().length };
 }
 
-/* --- host flow --- */
-
 async function startSyncHost(){
+  if (!window.CortexSync){ renderSyncError('sync.js did not load.'); return; }
   syncCard.textContent = '';
-
   const head = document.createElement('div');
   head.className = 'mHead';
   head.textContent = 'Host — step 1 of 2';
   syncCard.appendChild(head);
-
   const body = document.createElement('div');
   body.className = 'syncBody';
-
   const stepText = document.createElement('div');
   stepText.className = 'syncStep';
   stepText.textContent = 'Send this code to the other device:';
   body.appendChild(stepText);
-
   const offerTA = document.createElement('textarea');
   offerTA.className = 'syncCode';
   offerTA.readOnly = true;
   offerTA.placeholder = 'Generating...';
   body.appendChild(offerTA);
-
   const btns1 = document.createElement('div');
   btns1.className = 'syncBtns';
   const copyBtn = document.createElement('button');
@@ -2138,18 +2123,15 @@ async function startSyncHost(){
   });
   btns1.appendChild(copyBtn);
   body.appendChild(btns1);
-
   const step2 = document.createElement('div');
   step2.className = 'syncStep';
   step2.style.marginTop = '14px';
   step2.textContent = 'Paste the answer code you receive back:';
   body.appendChild(step2);
-
   const answerTA = document.createElement('textarea');
   answerTA.className = 'syncCode';
   answerTA.placeholder = 'Paste the answer code here';
   body.appendChild(answerTA);
-
   const btns2 = document.createElement('div');
   btns2.className = 'syncBtns';
   const connectBtn = document.createElement('button');
@@ -2157,11 +2139,8 @@ async function startSyncHost(){
   connectBtn.textContent = 'Connect';
   connectBtn.addEventListener('click', async () => {
     connectBtn.disabled = true;
-    try {
-      await window.CortexSync.acceptAnswer(answerTA.value.trim());
-    } catch(err){
-      renderSyncError(err && err.message ? err.message : String(err));
-    }
+    try { await window.CortexSync.acceptAnswer(answerTA.value.trim()); }
+    catch(err){ renderSyncError(err && err.message ? err.message : String(err)); }
   });
   btns2.appendChild(connectBtn);
   const cancelBtn = document.createElement('button');
@@ -2170,15 +2149,12 @@ async function startSyncHost(){
   cancelBtn.addEventListener('click', closeSyncModal);
   btns2.appendChild(cancelBtn);
   body.appendChild(btns2);
-
   const status = document.createElement('div');
   status.className = 'syncStatus';
   status.id = 'syncStatusBox';
   status.innerHTML = '<div class="lbl">Status</div><div class="val">Creating connection code...</div>';
   body.appendChild(status);
-
   syncCard.appendChild(body);
-
   try {
     const offerCode = await window.CortexSync.startHost();
     offerTA.value = offerCode;
@@ -2188,41 +2164,33 @@ async function startSyncHost(){
   }
 }
 
-/* --- guest flow --- */
-
 function startSyncGuest(){
+  if (!window.CortexSync){ renderSyncError('sync.js did not load.'); return; }
   syncCard.textContent = '';
-
   const head = document.createElement('div');
   head.className = 'mHead';
   head.textContent = 'Join — step 1 of 2';
   syncCard.appendChild(head);
-
   const body = document.createElement('div');
   body.className = 'syncBody';
-
   const step1 = document.createElement('div');
   step1.className = 'syncStep';
   step1.textContent = 'Paste the host code:';
   body.appendChild(step1);
-
   const offerTA = document.createElement('textarea');
   offerTA.className = 'syncCode';
   offerTA.placeholder = 'Paste the host code here';
   body.appendChild(offerTA);
-
   const step2 = document.createElement('div');
   step2.className = 'syncStep';
   step2.style.marginTop = '14px';
   step2.textContent = 'Send this answer code back to the host:';
   body.appendChild(step2);
-
   const answerTA = document.createElement('textarea');
   answerTA.className = 'syncCode';
   answerTA.readOnly = true;
   answerTA.placeholder = '(appears after you tap Connect)';
   body.appendChild(answerTA);
-
   const copyBtn = document.createElement('button');
   copyBtn.className = 'smallBtn';
   copyBtn.textContent = 'Copy answer code';
@@ -2232,7 +2200,6 @@ function startSyncGuest(){
     catch(e){ answerTA.select(); document.execCommand('copy'); copyBtn.textContent = 'Copied!'; }
     setTimeout(() => { copyBtn.textContent = 'Copy answer code'; }, 1500);
   });
-
   const btns = document.createElement('div');
   btns.className = 'syncBtns';
   const connectBtn = document.createElement('button');
@@ -2258,19 +2225,14 @@ function startSyncGuest(){
   cancelBtn.addEventListener('click', closeSyncModal);
   btns.appendChild(cancelBtn);
   body.appendChild(btns);
-
   body.appendChild(copyBtn);
-
   const status = document.createElement('div');
   status.className = 'syncStatus';
   status.id = 'syncStatusBox';
   status.innerHTML = '<div class="lbl">Status</div><div class="val">Waiting for host code...</div>';
   body.appendChild(status);
-
   syncCard.appendChild(body);
 }
-
-/* --- status helpers --- */
 
 function updateSyncProgress(state, message){
   const box = document.getElementById('syncStatusBox');
@@ -2279,7 +2241,6 @@ function updateSyncProgress(state, message){
     box.querySelector('.val').textContent = message;
   }
 }
-
 function renderSyncError(msg){
   const box = document.getElementById('syncStatusBox');
   if (box){
@@ -2287,11 +2248,9 @@ function renderSyncError(msg){
     box.classList.remove('ok');
     box.querySelector('.val').textContent = msg;
   } else {
-    // Rendered after modal closed — surface via alert
     alert('Sync failed: ' + msg);
   }
 }
-
 function renderSyncDone(local, remote, peerDevice){
   syncCard.textContent = '';
   const head = document.createElement('div');
@@ -2312,21 +2271,18 @@ function renderSyncDone(local, remote, peerDevice){
       'Total notes now: ' + (local.total || visibleNotes().length) + '.' +
     '</div>';
   body.appendChild(box);
-
   const done = document.createElement('button');
   done.className = 'primaryBtn';
   done.style.marginTop = '12px';
   done.textContent = 'Done';
   done.addEventListener('click', closeSyncModal);
   body.appendChild(done);
-
   syncCard.appendChild(body);
 }
 
 /* ============================================================
    Events
    ============================================================ */
-
 editor.addEventListener('input', () => {
   scheduleSave();
   renderLinkSuggest();
@@ -2404,7 +2360,6 @@ window.addEventListener('beforeunload', () => {
 /* ============================================================
    Viewport
    ============================================================ */
-
 function updateViewport(){
   const vv = window.visualViewport;
   if (!vv) return;
@@ -2421,8 +2376,9 @@ updateViewport();
 /* ============================================================
    Init
    ============================================================ */
-
 async function init(){
+  syncCallbacksInit();
+
   try { notes = await dbGetAll(); } catch(e){ notes = []; }
   await purgeOldTombstones();
 
@@ -2464,12 +2420,15 @@ async function init(){
     }, 1200);
   }
 }
-init();
+
+init().catch((err) => {
+  console.error('[Cortex] Init failed:', err);
+  if (window.__showErr) window.__showErr('Init failed', err && err.message ? err.message : String(err));
+});
 
 /* ============================================================
    Service worker
    ============================================================ */
-
 if ('serviceWorker' in navigator){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js', { scope: './' })
