@@ -369,48 +369,43 @@ function noteByTitle(title){
 }
 
 /* Convert [[Target]] / [[Target|Display]] into standard markdown links
-   with a custom scheme, so marked will render them as <a href="wiki://...">. */
+   with a custom scheme, so marked w */
+   /* Sentinel characters that won't appear in normal text.
+   Using control characters avoids any collision with user content. */
+const STASH_OPEN  = '\u0001';
+const STASH_CLOSE = '\u0002';
+
 function preprocessWikiLinks(md){
-  let out = '';
-  let i = 0;
-  while (i < md.length){
-    const c = md[i];
+  const stash = [];
+  const store = (m) => {
+    stash.push(m);
+    return STASH_OPEN + (stash.length - 1) + STASH_CLOSE;
+  };
 
-    // Skip over code spans and code fences (backtick-delimited)
-    if (c === '`'){
-      let n = 1;
-      while (md[i + n] === '`') n++;
-      const fence = '`'.repeat(n);
-      const close = md.indexOf(fence, i + n);
-      if (close === -1){
-        out += md.slice(i);
-        break;
-      }
-      out += md.slice(i, close + n);
-      i = close + n;
-      continue;
-    }
+  let s = md;
 
-    // Wiki link: [[Target]] or [[Target|Display]]
-    if (c === '[' && md[i + 1] === '['){
-      const end = md.indexOf(']]', i + 2);
-      if (end !== -1){
-        const inner = md.slice(i + 2, end);
-        const parts = inner.split('|');
-        const target = parts[0].trim();
-        const display = (parts[1] || parts[0]).trim();
-        if (target){
-          out += '[' + display + '](wiki://' + encodeURIComponent(target) + ')';
-          i = end + 2;
-          continue;
-        }
-      }
-    }
+  // 1. Stash fenced code blocks first (``` ... ```).
+  //    Must be before inline code, because a fence contains backticks.
+  s = s.replace(/```[\s\S]*?```/g, store);
 
-    out += c;
-    i++;
-  }
-  return out;
+  // 2. Stash inline code spans (` ... `).
+  s = s.replace(/`[^`\n]*`/g, store);
+
+  // 3. Now it's safe to convert wiki links. No real code remains.
+  s = s.replace(WIKI_RE, (_, target, display) => {
+    const t = target.trim();
+    const d = (display || target).trim();
+    if (!t) return _;
+    return '[' + d + '](wiki://' + encodeURIComponent(t) + ')';
+  });
+
+  // 4. Restore the stashed code verbatim.
+  s = s.replace(
+    new RegExp(STASH_OPEN + '(\\d+)' + STASH_CLOSE, 'g'),
+    (_, i) => stash[+i]
+  );
+
+  return s;
 }
 
 function styleWikiLinks(){
