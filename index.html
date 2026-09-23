@@ -1982,4 +1982,501 @@ function renderSyncLanding(){
   body.className = 'syncBody';
   body.innerHTML =
     '<div class="syncText">' +
-    'Both devices must be on the same Wi
+    'Both devices must be on the same Wi-Fi (or same network). One hosts, one joins. ' +
+    'You will copy two codes between the devices — any app works (WhatsApp, email, AirDrop).' +
+    '</div>';
+  syncCard.appendChild(body);
+
+  syncCard.appendChild(menuItem({
+    label: '📡  Host this device',
+    desc: 'Generate a code to send to the other device.',
+    onClick: () => startSyncHost(),
+  }));
+
+  syncCard.appendChild(menuItem({
+    label: '📥  Join another device',
+    desc: 'Enter the code from the device that is hosting.',
+    onClick: () => startSyncGuest(),
+  }));
+
+  syncCard.appendChild(menuItem({ label: 'Cancel', onClick: closeSyncModal }));
+}
+
+/* --- progress hook --- */
+if (window.CortexSync){
+  window.CortexSync.setNotesProvider(async () => {
+    return notes.map(n => ({
+      id: n.id,
+      title: n.title || 'Untitled',
+      body: n.body || '',
+      created: n.created || Date.now(),
+      updated: n.updated || Date.now(),
+      deleted: !!n.deleted,
+      deletedAt: n.deletedAt || null,
+    }));
+  });
+
+  window.CortexSync.setNotesReceiver(async (theirs) => {
+    return await mergeFromPeer(theirs);
+  });
+
+  window.CortexSync.setProgressCallback(({ state, message }) => {
+    updateSyncProgress(state, message);
+  });
+
+  window.CortexSync.setDoneCallback(({ local, remote, peerDevice }) => {
+    renderSyncDone(local, remote, peerDevice);
+  });
+
+  window.CortexSync.setErrorCallback((err) => {
+    renderSyncError(err && err.message ? err.message : String(err));
+  });
+}
+
+async function mergeFromPeer(theirs){
+  const myMap = new Map(notes.map(n => [n.id, n]));
+  let added = 0, updated = 0, deleted = 0;
+
+  for (const their of theirs){
+    if (!their || typeof their.id !== 'string') continue;
+    const mine = myMap.get(their.id);
+    const theirTime = their.deletedAt || their.updated || 0;
+
+    if (!mine){
+      // New to us
+      const incoming = {
+        id: their.id,
+        title: (typeof their.title === 'string') ? their.title.slice(0, 500) : 'Untitled',
+        body: (typeof their.body === 'string') ? their.body.slice(0, 5 * 1024 * 1024) : '',
+        created: (typeof their.created === 'number') ? their.created : Date.now(),
+        updated: (typeof their.updated === 'number') ? their.updated : Date.now(),
+        deleted: !!their.deleted,
+        deletedAt: (typeof their.deletedAt === 'number') ? their.deletedAt : null,
+      };
+      notes.push(incoming);
+      await dbPut(incoming);
+      if (incoming.deleted) deleted++; else added++;
+      continue;
+    }
+
+    const myTime = mine.deletedAt || mine.updated || 0;
+    if (theirTime > myTime){
+      // Theirs is newer — replace ours
+      const wasDeleted = !!mine.deleted;
+      mine.title = (typeof their.title === 'string') ? their.title.slice(0, 500) : mine.title;
+      mine.body = (typeof their.body === 'string') ? their.body.slice(0, 5 * 1024 * 1024) : mine.body;
+      mine.updated = (typeof their.updated === 'number') ? their.updated : mine.updated;
+      mine.deleted = !!their.deleted;
+      mine.deletedAt = (typeof their.deletedAt === 'number') ? their.deletedAt : null;
+      await dbPut(mine);
+      if (mine.deleted && !wasDeleted){
+        deleted++;
+        try { await dbDeleteEmbedding(mine.id); } catch(e){}
+      } else if (!mine.deleted){
+        updated++;
+        scheduleEmbed(mine.id);
+      }
+    }
+  }
+
+  await refreshEmbedCount();
+  renderNoteList();
+  renderBacklinks();
+  if (view === 'preview') updatePreview();
+
+  // If our active note got deleted by the merge, pick a new one
+  const active = activeNote();
+  if (!active){
+    const vis = visibleNotes();
+    if (vis.length){
+      const next = [...vis].sort((a, b) => b.updated - a.updated)[0];
+      activeId = next.id;
+      titleInput.value = next.title === 'Untitled' ? '' : (next.title || '');
+      editor.value = next.body || '';
+      editor.scrollTop = 0;
+    } else {
+      await createNote();
+    }
+  }
+
+  return { added, updated, deleted, total: visibleNotes().length };
+}
+
+/* --- host flow --- */
+
+async function startSyncHost(){
+  syncCard.textContent = '';
+
+  const head = document.createElement('div');
+  head.className = 'mHead';
+  head.textContent = 'Host — step 1 of 2';
+  syncCard.appendChild(head);
+
+  const body = document.createElement('div');
+  body.className = 'syncBody';
+
+  const stepText = document.createElement('div');
+  stepText.className = 'syncStep';
+  stepText.textContent = 'Send this code to the other device:';
+  body.appendChild(stepText);
+
+  const offerTA = document.createElement('textarea');
+  offerTA.className = 'syncCode';
+  offerTA.readOnly = true;
+  offerTA.placeholder = 'Generating...';
+  body.appendChild(offerTA);
+
+  const btns1 = document.createElement('div');
+  btns1.className = 'syncBtns';
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'smallBtn';
+  copyBtn.textContent = 'Copy code';
+  copyBtn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(offerTA.value); copyBtn.textContent = 'Copied!'; }
+    catch(e){ offerTA.select(); document.execCommand('copy'); copyBtn.textContent = 'Copied!'; }
+    setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1500);
+  });
+  btns1.appendChild(copyBtn);
+  body.appendChild(btns1);
+
+  const step2 = document.createElement('div');
+  step2.className = 'syncStep';
+  step2.style.marginTop = '14px';
+  step2.textContent = 'Paste the answer code you receive back:';
+  body.appendChild(step2);
+
+  const answerTA = document.createElement('textarea');
+  answerTA.className = 'syncCode';
+  answerTA.placeholder = 'Paste the answer code here';
+  body.appendChild(answerTA);
+
+  const btns2 = document.createElement('div');
+  btns2.className = 'syncBtns';
+  const connectBtn = document.createElement('button');
+  connectBtn.className = 'primaryBtn';
+  connectBtn.textContent = 'Connect';
+  connectBtn.addEventListener('click', async () => {
+    connectBtn.disabled = true;
+    try {
+      await window.CortexSync.acceptAnswer(answerTA.value.trim());
+    } catch(err){
+      renderSyncError(err && err.message ? err.message : String(err));
+    }
+  });
+  btns2.appendChild(connectBtn);
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'smallBtn';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', closeSyncModal);
+  btns2.appendChild(cancelBtn);
+  body.appendChild(btns2);
+
+  const status = document.createElement('div');
+  status.className = 'syncStatus';
+  status.id = 'syncStatusBox';
+  status.innerHTML = '<div class="lbl">Status</div><div class="val">Creating connection code...</div>';
+  body.appendChild(status);
+
+  syncCard.appendChild(body);
+
+  try {
+    const offerCode = await window.CortexSync.startHost();
+    offerTA.value = offerCode;
+    status.querySelector('.val').textContent = 'Ready. Send the code above to the other device.';
+  } catch(err){
+    renderSyncError(err && err.message ? err.message : String(err));
+  }
+}
+
+/* --- guest flow --- */
+
+function startSyncGuest(){
+  syncCard.textContent = '';
+
+  const head = document.createElement('div');
+  head.className = 'mHead';
+  head.textContent = 'Join — step 1 of 2';
+  syncCard.appendChild(head);
+
+  const body = document.createElement('div');
+  body.className = 'syncBody';
+
+  const step1 = document.createElement('div');
+  step1.className = 'syncStep';
+  step1.textContent = 'Paste the host code:';
+  body.appendChild(step1);
+
+  const offerTA = document.createElement('textarea');
+  offerTA.className = 'syncCode';
+  offerTA.placeholder = 'Paste the host code here';
+  body.appendChild(offerTA);
+
+  const step2 = document.createElement('div');
+  step2.className = 'syncStep';
+  step2.style.marginTop = '14px';
+  step2.textContent = 'Send this answer code back to the host:';
+  body.appendChild(step2);
+
+  const answerTA = document.createElement('textarea');
+  answerTA.className = 'syncCode';
+  answerTA.readOnly = true;
+  answerTA.placeholder = '(appears after you tap Connect)';
+  body.appendChild(answerTA);
+
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'smallBtn';
+  copyBtn.textContent = 'Copy answer code';
+  copyBtn.disabled = true;
+  copyBtn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(answerTA.value); copyBtn.textContent = 'Copied!'; }
+    catch(e){ answerTA.select(); document.execCommand('copy'); copyBtn.textContent = 'Copied!'; }
+    setTimeout(() => { copyBtn.textContent = 'Copy answer code'; }, 1500);
+  });
+
+  const btns = document.createElement('div');
+  btns.className = 'syncBtns';
+  const connectBtn = document.createElement('button');
+  connectBtn.className = 'primaryBtn';
+  connectBtn.textContent = 'Connect';
+  connectBtn.addEventListener('click', async () => {
+    connectBtn.disabled = true;
+    try {
+      const answerCode = await window.CortexSync.joinWithOffer(offerTA.value.trim());
+      answerTA.value = answerCode;
+      copyBtn.disabled = false;
+      const status = document.getElementById('syncStatusBox');
+      if (status) status.querySelector('.val').textContent = 'Answer code ready. Send it back to the host.';
+    } catch(err){
+      connectBtn.disabled = false;
+      renderSyncError(err && err.message ? err.message : String(err));
+    }
+  });
+  btns.appendChild(connectBtn);
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'smallBtn';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', closeSyncModal);
+  btns.appendChild(cancelBtn);
+  body.appendChild(btns);
+
+  body.appendChild(copyBtn);
+
+  const status = document.createElement('div');
+  status.className = 'syncStatus';
+  status.id = 'syncStatusBox';
+  status.innerHTML = '<div class="lbl">Status</div><div class="val">Waiting for host code...</div>';
+  body.appendChild(status);
+
+  syncCard.appendChild(body);
+}
+
+/* --- status helpers --- */
+
+function updateSyncProgress(state, message){
+  const box = document.getElementById('syncStatusBox');
+  if (box){
+    box.classList.remove('err', 'ok');
+    box.querySelector('.val').textContent = message;
+  }
+}
+
+function renderSyncError(msg){
+  const box = document.getElementById('syncStatusBox');
+  if (box){
+    box.classList.add('err');
+    box.classList.remove('ok');
+    box.querySelector('.val').textContent = msg;
+  } else {
+    // Rendered after modal closed — surface via alert
+    alert('Sync failed: ' + msg);
+  }
+}
+
+function renderSyncDone(local, remote, peerDevice){
+  syncCard.textContent = '';
+  const head = document.createElement('div');
+  head.className = 'mHead';
+  head.textContent = 'Sync complete';
+  syncCard.appendChild(head);
+  const body = document.createElement('div');
+  body.className = 'syncBody';
+  const box = document.createElement('div');
+  box.className = 'syncStatus ok';
+  box.innerHTML =
+    '<div class="lbl">Result</div>' +
+    '<div class="val">' +
+      'Paired with ' + (peerDevice || 'peer') + '.<br>' +
+      'From peer: ' + (local.added || 0) + ' added, ' +
+      (local.updated || 0) + ' updated, ' +
+      (local.deleted || 0) + ' deleted.<br>' +
+      'Total notes now: ' + (local.total || visibleNotes().length) + '.' +
+    '</div>';
+  body.appendChild(box);
+
+  const done = document.createElement('button');
+  done.className = 'primaryBtn';
+  done.style.marginTop = '12px';
+  done.textContent = 'Done';
+  done.addEventListener('click', closeSyncModal);
+  body.appendChild(done);
+
+  syncCard.appendChild(body);
+}
+
+/* ============================================================
+   Events
+   ============================================================ */
+
+editor.addEventListener('input', () => {
+  scheduleSave();
+  renderLinkSuggest();
+  if (view === 'preview') updatePreview();
+});
+titleInput.addEventListener('input', scheduleSave);
+searchBox.addEventListener('input', () => {
+  if (searchMode === 'semantic'){
+    renderNoteList();
+    clearTimeout(semanticDebounce);
+    semanticDebounce = setTimeout(runSemanticQuery, 200);
+  } else {
+    renderNoteList();
+  }
+});
+searchBox.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter'){
+    e.preventDefault();
+    if (searchMode === 'semantic'){ clearTimeout(semanticDebounce); runSemanticQuery(); }
+  }
+});
+searchBox.addEventListener('search', () => {
+  if (searchMode === 'semantic') runSemanticQuery();
+  else renderNoteList();
+});
+btnSearchMode.addEventListener('click', toggleSearchMode);
+embedFooter.addEventListener('click', () => {
+  if (embedStatus === 'error'){ embedderLoading = null; embedStatus = 'idle'; embedSweep().catch(() => {}); return; }
+  if (confirm('Re-index all notes?')) reindexAll();
+});
+document.getElementById('btnNew').addEventListener('click', () => createNote());
+document.getElementById('btnPreview').addEventListener('click', () => {
+  setView(view === 'edit' ? 'preview' : 'edit');
+});
+document.getElementById('btnSidebar').addEventListener('click', () => {
+  if (sidebar.classList.contains('open')) closeSidebar(); else openSidebar();
+});
+scrim.addEventListener('click', closeSidebar);
+editor.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape'){
+    if (linkSuggest.style.display !== 'none'){ e.preventDefault(); linkSuggest.style.display = 'none'; return; }
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'l'){
+    e.preventDefault();
+    const pos = editor.selectionStart;
+    replaceFromTo(pos, editor.selectionEnd, '[[');
+    renderLinkSuggest();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n'){ e.preventDefault(); createNote(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'e'){ e.preventDefault(); setView(view === 'edit' ? 'preview' : 'edit'); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k'){
+    e.preventDefault();
+    if (chatSheet.classList.contains('open')) closeChat(); else openChat();
+  }
+  if (e.key === 'Escape'){
+    closeSidebar();
+    if (syncModal.classList.contains('open')) closeSyncModal();
+    else if (menuModal.classList.contains('open')) closeMenu();
+    else if (modelModal.classList.contains('open')) closeModelModal();
+    else if (chatSheet.classList.contains('open')) closeChat();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace'){
+    if (document.activeElement !== editor && document.activeElement !== titleInput){
+      e.preventDefault(); deleteActiveNote();
+    }
+  }
+});
+window.addEventListener('beforeunload', () => {
+  const n = activeNote();
+  if (n){ n.title = titleInput.value.trim() || 'Untitled'; n.body = editor.value; n.updated = Date.now(); }
+});
+
+/* ============================================================
+   Viewport
+   ============================================================ */
+
+function updateViewport(){
+  const vv = window.visualViewport;
+  if (!vv) return;
+  document.documentElement.style.setProperty('--vvh', vv.height + 'px');
+  document.documentElement.style.setProperty('--vvt', vv.offsetTop + 'px');
+}
+if (window.visualViewport){
+  window.visualViewport.addEventListener('resize', updateViewport);
+  window.visualViewport.addEventListener('scroll', () => { updateViewport(); window.scrollTo(0, 0); });
+}
+window.addEventListener('orientationchange', () => setTimeout(updateViewport, 250));
+updateViewport();
+
+/* ============================================================
+   Init
+   ============================================================ */
+
+async function init(){
+  try { notes = await dbGetAll(); } catch(e){ notes = []; }
+  await purgeOldTombstones();
+
+  if (!visibleNotes().length){
+    const a = {
+      id: uid(),
+      title: 'Welcome to Cortex',
+      body: '# Welcome to Cortex\n\nThis is a note. It links to another: [[How wiki links work]].\n',
+      created: Date.now(), updated: Date.now(),
+    };
+    const b = {
+      id: uid(),
+      title: 'How wiki links work',
+      body: '# Wiki links\n\nType `[[` to link to another note.\n',
+      created: Date.now(), updated: Date.now(),
+    };
+    notes.push(a, b);
+    try { await dbPut(a); await dbPut(b); } catch(e){}
+  }
+
+  const sorted = [...visibleNotes()].sort((a, b) => b.updated - a.updated);
+  activeId = sorted[0].id;
+  const n = activeNote();
+  titleInput.value = n.title === 'Untitled' ? '' : (n.title || '');
+  editor.value = n.body || '';
+
+  renderNoteList();
+  renderBacklinks();
+  setView('edit');
+  setModelState('', 'idle');
+  updateFastChip();
+  updateEmbedStatusUI();
+  editor.focus();
+
+  if (visibleNotes().some(n => n.body && n.body.trim().length > 20)){
+    setTimeout(async () => {
+      try { await loadEmbedder(); await embedSweep(); }
+      catch(err){ console.warn('[Cortex] Embedder init failed:', err); }
+    }, 1200);
+  }
+}
+init();
+
+/* ============================================================
+   Service worker
+   ============================================================ */
+
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { scope: './' })
+      .then(() => console.log('[Cortex] SW active. Version:', APP_VERSION))
+      .catch((err) => console.warn('[Cortex] SW registration failed:', err));
+  });
+}
+</script>
+</body>
+</html>
