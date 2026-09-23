@@ -191,8 +191,25 @@ body{
   flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
   padding:10px 12px;border-bottom:1px solid var(--line);
   font-size:13px;font-weight:600;letter-spacing:.2px;
+  gap:8px;
 }
-#chatHead .grp{display:flex;gap:6px;}
+#chatHead > span:first-child{display:flex;align-items:center;flex-wrap:wrap;}
+#chatHead .grp{display:flex;gap:6px;flex:0 0 auto;}
+
+/* ---- model state pill ---- */
+.statePill{
+  display:inline-block;margin-left:8px;
+  padding:2px 8px;border-radius:10px;
+  font-size:10px;font-weight:600;letter-spacing:.5px;
+  text-transform:uppercase;vertical-align:middle;
+  background:var(--panel2);color:var(--muted);
+  border:1px solid var(--line);
+  line-height:1.4;
+}
+.statePill.loading{background:#3a2f0e;color:#e0a800;border-color:#5a4517;}
+.statePill.ready{background:#12331f;color:#3ddc84;border-color:#1e5133;}
+.statePill.error{background:#3a1212;color:#f48771;border-color:#5a1e1e;}
+
 .smallBtn{
   background:var(--panel2);border:1px solid var(--line);color:var(--text);
   border-radius:5px;padding:5px 10px;font-size:12px;cursor:pointer;
@@ -235,7 +252,7 @@ body{
 }
 #chatQuickBar::-webkit-scrollbar{display:none;}
 .quickChip{
-  flex:0 0 auto;padding:6px 11px;border-radius:14px;
+  flex:0 0 auto;padding:6px 11px;border-radius:14px
   background:var(--panel2);border:1px solid var(--line);color:var(--muted);
   font-size:12px;cursor:pointer;user-select:none;-webkit-user-select:none;
 }
@@ -302,13 +319,16 @@ body{
     <div id="chatScrim"></div>
     <div id="chatSheet">
       <div id="chatHead">
-        <span>✨ Ask Cortex</span>
+        <span>✨ Ask Cortex <span id="modelState" class="statePill">idle</span></span>
         <div class="grp">
+          <button class="smallBtn" id="btnMemInfo" title="Memory info">i</button>
           <button class="smallBtn" id="btnClearChat">Clear</button>
+          <button class="smallBtn" id="btnUnload">Unload</button>
           <button class="smallBtn" id="btnCloseChat">✕</button>
         </div>
       </div>
       <div id="chatProgress">
+        <div id="chatProgressDevice" style="font-size:12px;color:var(--muted);margin-bottom:6px;"></div>
         <div id="chatProgressText">Loading model...</div>
         <div class="bar"><div id="chatProgressBar"></div></div>
       </div>
@@ -385,23 +405,76 @@ async function dbDelete(id){
 }
 
 /* ============================================================
-   2. State
+   2. Device detection + model catalog
+   ============================================================ */
+
+const MODEL_CATALOG = {
+  tiny: {
+    id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
+    label: 'Tiny (Qwen 0.5B)',
+    size: '~350 MB',
+    minMemory: 0,
+  },
+  small: {
+    id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+    label: 'Small (Llama 1B)',
+    size: '~700 MB',
+    minMemory: 4,
+  },
+  medium: {
+    id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
+    label: 'Medium (Llama 3B)',
+    size: '~2 GB',
+    minMemory: 8,
+  },
+};
+
+function detectDevice(){
+  return {
+    memory: (typeof navigator.deviceMemory === 'number') ? navigator.deviceMemory : null,
+    cores: navigator.hardwareConcurrency || null,
+    webgpu: ('gpu' in navigator),
+    userAgent: navigator.userAgent,
+  };
+}
+
+function recommendModel(specs){
+  if (!specs.webgpu){
+    return { tier: null, reason: 'WebGPU not available — AI features disabled.' };
+  }
+  if (specs.memory === null){
+    return { tier: 'small',
+             reason: 'Memory info unavailable — defaulting to Small (safe for most devices).' };
+  }
+  if (specs.memory >= 8) return { tier: 'medium', reason: '8+ GB RAM detected — Medium will run well.' };
+  if (specs.memory >= 4) return { tier: 'small',  reason: '4-8 GB RAM detected — Small is the sweet spot.' };
+  return { tier: 'tiny', reason: 'Under 4 GB RAM detected — Tiny for stability.' };
+}
+
+const DEVICE = detectDevice();
+const RECOMMEND = recommendModel(DEVICE);
+let MODEL_ID = MODEL_CATALOG[RECOMMEND.tier]
+  ? MODEL_CATALOG[RECOMMEND.tier].id
+  : MODEL_CATALOG.small.id;
+
+console.log('[Cortex] Device:', DEVICE);
+console.log('[Cortex] Recommendation:', RECOMMEND, '->', MODEL_ID);
+
+/* ============================================================
+   3. State
    ============================================================ */
 
 let notes = [];
 let activeId = null;
 let view = 'edit';
 
-let chatHistory = [];        // { role, content }
-let chatLoading = false;
+let chatHistory = [];
 let generating = false;
 let llmEngine = null;
 let llmLoadingPromise = null;
 
-const MODEL_ID = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
-
 /* ============================================================
-   3. DOM
+   4. DOM
    ============================================================ */
 
 const editor       = document.getElementById('editor');
@@ -424,7 +497,7 @@ const chatProgressText = document.getElementById('chatProgressText');
 const chatProgressBar  = document.getElementById('chatProgressBar');
 
 /* ============================================================
-   4. Helpers
+   5. Helpers
    ============================================================ */
 
 function uid(){
@@ -458,7 +531,7 @@ function sanitizeHTML(html){
 }
 
 /* ============================================================
-   5. Wiki links
+   6. Wiki links
    ============================================================ */
 
 const WIKI_RE = /\[\[([^\[\]|]+?)(?:\|([^\[\]]+?))?\]\]/g;
@@ -508,7 +581,7 @@ function styleWikiLinks(){
 }
 
 /* ============================================================
-   6. Sidebar
+   7. Sidebar
    ============================================================ */
 
 function renderNoteList(){
@@ -559,7 +632,7 @@ function openSidebar(){ sidebar.classList.add('open'); scrim.classList.add('show
 function closeSidebar(){ sidebar.classList.remove('open'); scrim.classList.remove('show'); }
 
 /* ============================================================
-   7. Backlinks
+   8. Backlinks
    ============================================================ */
 
 function findBacklinks(noteId){
@@ -597,7 +670,7 @@ function renderBacklinks(){
 }
 
 /* ============================================================
-   8. Note CRUD
+   9. Note CRUD
    ============================================================ */
 
 async function saveNote(){
@@ -673,13 +746,13 @@ async function deleteActiveNote(){
 }
 
 /* ============================================================
-   9. Wiki link navigation + autocomplete
+   10. Wiki link navigation + autocomplete
    ============================================================ */
 
 async function navigateToWikiLink(target){
   const existing = noteByTitle(target);
   if (existing){ await switchNote(existing.id); return; }
-  const n = await createNote(target, '');
+  await createNote(target, '');
   if (view === 'preview') setView('edit');
   editor.focus();
 }
@@ -745,7 +818,7 @@ function insertLinkSuggestion(ctx, title){
 }
 
 /* ============================================================
-   10. Preview
+   11. Preview
    ============================================================ */
 
 if (window.marked && window.marked.use){
@@ -790,13 +863,19 @@ preview.addEventListener('click', (e) => {
 });
 
 /* ============================================================
-   11. Chat — WebLLM
+   12. Chat — WebLLM
    ============================================================ */
+
+function setModelState(state, label){
+  const el = document.getElementById('modelState');
+  if (!el) return;
+  el.className = 'statePill' + (state ? ' ' + state : '');
+  el.textContent = label || state || 'idle';
+}
 
 function openChat(){
   chatSheet.classList.add('open');
   chatScrim.classList.add('show');
-  // Lazily start the model load the first time the sheet opens.
   if (!llmEngine && !llmLoadingPromise){
     startEngineLoad();
   }
@@ -813,6 +892,8 @@ document.getElementById('btnClearChat').addEventListener('click', () => {
   chatMessages.textContent = '';
   appendMessage('system', 'Chat cleared.');
 });
+document.getElementById('btnUnload').addEventListener('click', unloadModel);
+document.getElementById('btnMemInfo').addEventListener('click', showMemoryInfo);
 
 function appendMessage(role, text){
   const el = document.createElement('div');
@@ -840,39 +921,51 @@ async function startEngineLoad(){
   if (llmLoadingPromise) return llmLoadingPromise;
 
   if (!('gpu' in navigator)){
+    setModelState('error', 'no gpu');
     appendMessage('system',
-      '⚠ WebGPU is not available in this browser. Update Chrome to the latest version, then reopen. Cortex works without AI; this panel just won\'t respond.');
+      'WebGPU is not available in this browser. Update Chrome to the latest version, then reopen. Cortex works without AI; this panel just will not respond.');
     chatInput.disabled = true;
     btnSend.disabled = true;
     return null;
   }
 
-  showChatProgress('Downloading model (~700 MB). This happens once.', 0);
+  const tierInfo = MODEL_CATALOG[RECOMMEND.tier] || MODEL_CATALOG.small;
+  const deviceEl = document.getElementById('chatProgressDevice');
+  if (deviceEl){
+    deviceEl.textContent = DEVICE.memory !== null
+      ? 'Detected: ' + DEVICE.memory + ' GB RAM, ' + (DEVICE.cores || '?') +
+        ' cores. Loading ' + tierInfo.label + ' (' + tierInfo.size + ').'
+      : 'Device memory not exposed. Loading ' + tierInfo.label + ' (' + tierInfo.size + ').';
+  }
+
+  setModelState('loading', 'loading');
+  showChatProgress('Downloading model (' + tierInfo.size + '). This happens once.', 0);
 
   llmLoadingPromise = (async () => {
     try {
-      // Dynamic import — pulls WebLLM from jsDelivr's ESM proxy.
       const webllm = await import('https://esm.run/@mlc-ai/web-llm');
 
       const engine = await webllm.CreateMLCEngine(MODEL_ID, {
-  appConfig: {
-    useIndexedDBCache: true,
-  },
-  initProgressCallback: (report) => {
-    const text = report && report.text ? report.text : 'Loading...';
-    showChatProgress(text, report && report.progress);
-  },
-});
+        appConfig: {
+          useIndexedDBCache: true,
+        },
+        initProgressCallback: (report) => {
+          const text = report && report.text ? report.text : 'Loading...';
+          showChatProgress(text, report && report.progress);
+        },
+      });
 
       llmEngine = engine;
       hideChatProgress();
       chatInput.disabled = false;
       btnSend.disabled = false;
-      appendMessage('system', '✓ Model ready. Ask anything about this note.');
+      setModelState('ready', 'ready');
+      appendMessage('system', 'Model ready. Ask anything about this note.');
       return engine;
     } catch(err){
       hideChatProgress();
-      appendMessage('system', '⚠ Could not load model: ' + (err && err.message ? err.message : err));
+      setModelState('error', 'error');
+      appendMessage('system', 'Could not load model: ' + (err && err.message ? err.message : err));
       chatInput.disabled = true;
       btnSend.disabled = true;
       llmLoadingPromise = null;
@@ -881,6 +974,51 @@ async function startEngineLoad(){
   })();
 
   return llmLoadingPromise;
+}
+
+async function unloadModel(){
+  const wasReady = !!llmEngine;
+  try {
+    if (llmEngine && typeof llmEngine.unload === 'function'){
+      await llmEngine.unload();
+    }
+  } catch(e){
+    console.warn('unload failed:', e);
+  }
+  llmEngine = null;
+  llmLoadingPromise = null;
+  chatHistory = [];
+  chatMessages.textContent = '';
+  hideChatProgress();
+  chatInput.disabled = true;
+  btnSend.disabled = true;
+  setModelState('', 'idle');
+  appendMessage('system',
+    wasReady
+      ? 'Model unloaded. Memory freed. Tap Send to reload.'
+      : 'Model loading cancelled.');
+}
+
+function showMemoryInfo(){
+  const used = (typeof performance !== 'undefined' && performance.memory)
+    ? (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1) + ' MB'
+    : 'not available';
+  const limit = (typeof performance !== 'undefined' && performance.memory)
+    ? (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(0) + ' MB'
+    : 'n/a';
+  const dev = navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'not exposed';
+  const cores = navigator.hardwareConcurrency || 'unknown';
+  const state = llmEngine ? 'LOADED' : 'not loaded';
+
+  alert(
+    'Model state: ' + state + '\n' +
+    'Model ID: ' + MODEL_ID + '\n' +
+    'JS heap used: ' + used + ' / ' + limit + '\n' +
+    'Device memory (rounded): ' + dev + '\n' +
+    'CPU cores: ' + cores + '\n\n' +
+    'Note: the model lives in GPU memory, not JS heap.\n' +
+    'For real GPU memory stats, visit chrome://gpu'
+  );
 }
 
 function buildMessages(){
@@ -905,20 +1043,33 @@ function buildMessages(){
 }
 
 async function sendMessage(text){
-  if (generating || !llmEngine) return;
+  if (generating) return;
   text = (text || '').trim();
   if (!text) return;
+
+  if (!llmEngine){
+    chatInput.disabled = true;
+    btnSend.disabled = true;
+    chatHistory.push({ role: 'user', content: text });
+    appendMessage('user', text);
+    await startEngineLoad();
+    if (!llmEngine){
+      chatInput.disabled = true;
+      btnSend.disabled = true;
+      return;
+    }
+  } else {
+    chatHistory.push({ role: 'user', content: text });
+    appendMessage('user', text);
+  }
 
   generating = true;
   btnSend.disabled = true;
   chatInput.disabled = true;
-
-  chatHistory.push({ role: 'user', content: text });
-  appendMessage('user', text);
   chatInput.value = '';
   chatInput.style.height = '';
 
-  const assistantEl = appendMessage('assistant', '…');
+  const assistantEl = appendMessage('assistant', '...');
 
   try {
     const chunks = await llmEngine.chat.completions.create({
@@ -928,26 +1079,41 @@ async function sendMessage(text){
     });
 
     let full = '';
-    let first = true;
+    let pending = '';
+    let rafScheduled = false;
+    let started = false;
+
+    function flush(){
+      rafScheduled = false;
+      if (!pending) return;
+      if (!started){ assistantEl.textContent = ''; started = true; }
+      assistantEl.appendChild(document.createTextNode(pending));
+      pending = '';
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
     for await (const chunk of chunks){
       const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta
         ? (chunk.choices[0].delta.content || '')
         : '';
       if (!delta) continue;
-      if (first){ assistantEl.textContent = ''; first = false; }
       full += delta;
-      assistantEl.textContent = full;
-      chatMessages.scrollTop = chatMessages.scrollHeight;
+      pending += delta;
+      if (!rafScheduled){
+        rafScheduled = true;
+        requestAnimationFrame(flush);
+      }
     }
-    if (first) assistantEl.textContent = '(no response)';
+    flush();
+    if (!started) assistantEl.textContent = '(no response)';
     chatHistory.push({ role: 'assistant', content: full });
   } catch(err){
-    assistantEl.textContent = '⚠ Error: ' + (err && err.message ? err.message : err);
+    assistantEl.textContent = 'Error: ' + (err && err.message ? err.message : err);
     assistantEl.classList.add('error');
   } finally {
     generating = false;
-    btnSend.disabled = false;
-    chatInput.disabled = false;
+    btnSend.disabled = !llmEngine;
+    chatInput.disabled = !llmEngine;
     chatInput.focus();
   }
 }
@@ -969,7 +1135,6 @@ document.getElementById('btnChat').addEventListener('click', () => {
   else openChat();
 });
 
-/* Quick prompts */
 document.getElementById('quickSummarize').addEventListener('click', () => {
   chatInput.value = 'Summarize this note in 3 sentences.';
   chatInput.focus();
@@ -984,7 +1149,7 @@ document.getElementById('quickQuestions').addEventListener('click', () => {
 });
 
 /* ============================================================
-   12. Events
+   13. Events
    ============================================================ */
 
 editor.addEventListener('input', () => {
@@ -1054,7 +1219,7 @@ window.addEventListener('beforeunload', () => {
 });
 
 /* ============================================================
-   13. Viewport
+   14. Viewport
    ============================================================ */
 
 function updateViewport(){
@@ -1073,7 +1238,7 @@ window.addEventListener('orientationchange', () => setTimeout(updateViewport, 25
 updateViewport();
 
 /* ============================================================
-   14. Init
+   15. Init
    ============================================================ */
 
 async function init(){
@@ -1086,9 +1251,9 @@ async function init(){
       body:
         '# Welcome to Cortex\n\n' +
         'This is a note. It links to another note: [[How wiki links work]].\n\n' +
-        'Tap **Preview** (or press Ctrl+E) to see the link render. Then tap **✨** in the top bar to ask the AI about this note.\n\n' +
+        'Tap **Preview** (or press Ctrl+E) to see the link render. Then tap the sparkle icon in the top bar to ask the AI about this note.\n\n' +
         '## The AI runs on your device\n\n' +
-        'The first time you open the chat, Cortex downloads a small language model (about 700 MB). After that, it works offline. Nothing is sent to any server.\n',
+        'The first time you open the chat, Cortex downloads a small language model. After that, it works offline. Nothing is sent to any server. The colored pill next to "Ask Cortex" shows whether the model is currently loaded into memory.\n',
       created: Date.now(),
       updated: Date.now(),
     };
@@ -1099,12 +1264,12 @@ async function init(){
         '## Wiki links\n\n' +
         'Type `[[` in the editor and a suggestion bar appears. Keep typing to filter, or tap a title to insert it.\n\n' +
         'Formats supported:\n\n' +
-        '- `[[Some Note]]` — links to "Some Note", displays as "Some Note"\n' +
-        '- `[[Some Note|display text]]` — links to "Some Note", displays as "display text"\n' +
+        '- `[[Some Note]]` - links to "Some Note", displays as "Some Note"\n' +
+        '- `[[Some Note|display text]]` - links to "Some Note", displays as "display text"\n' +
         '- Matching is case-insensitive\n' +
-        '- If the target note doesn\'t exist, clicking the link creates it\n\n' +
+        '- If the target note does not exist, clicking the link creates it\n\n' +
         '## Backlinks\n\n' +
-        'Open "Welcome to Cortex" and you\'ll see a strip at the bottom saying "Linked from" with a chip pointing back here.\n',
+        'Open "Welcome to Cortex" and you will see a strip at the bottom saying "Linked from" with a chip pointing back here.\n',
       created: Date.now(),
       updated: Date.now(),
     };
@@ -1121,13 +1286,14 @@ async function init(){
   renderNoteList();
   renderBacklinks();
   setView('edit');
+  setModelState('', 'idle');
   editor.focus();
 }
 
 init();
 
 /* ============================================================
-   15. Service worker
+   16. Service worker
    ============================================================ */
 
 if ('serviceWorker' in navigator){
