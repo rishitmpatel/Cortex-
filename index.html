@@ -43,7 +43,6 @@ body{
 }
 #app{position:fixed;left:0;right:0;top:var(--vvt);height:var(--vvh);
   display:flex;flex-direction:column;background:var(--bg);}
-
 #topbar{flex:0 0 auto;height:50px;display:flex;align-items:center;gap:5px;
   padding:0 8px;background:var(--panel);border-bottom:1px solid var(--line);}
 #brand{font-weight:600;font-size:15px;flex:1;text-align:center;color:#cccccc;
@@ -62,9 +61,7 @@ body{
   flex:0 0 auto;}
 .primaryBtn:active{opacity:.85;}
 .primaryBtn:disabled{opacity:.5;cursor:not-allowed;}
-
 #main{flex:1 1 auto;display:flex;min-height:0;position:relative;}
-
 #sidebar{
   width:var(--sidebar-width);flex:0 0 auto;
   background:var(--panel);border-right:1px solid var(--line);
@@ -86,7 +83,6 @@ body{
 }
 #btnSearchMode.semantic{background:var(--btn);color:#fff;border-color:var(--btn);}
 #btnSearchMode:active{opacity:.85;}
-
 #searchStatus{
   font-size:11px;color:var(--muted);
   margin-top:5px;min-height:14px;
@@ -99,9 +95,7 @@ body{
   display:inline-block;
 }
 #searchStatus.busy .dot{animation:pulse .9s infinite;}
-
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
-
 #noteList{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .noteItem{
   padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;
@@ -118,7 +112,6 @@ body{
 .noteScore{font-size:10px;background:rgba(167,139,250,.18);padding:1px 6px;
   border-radius:8px;color:var(--accent);font-weight:600;}
 .noteScore.low{background:var(--panel2);color:var(--muted);font-weight:400;}
-
 .searchingRow{
   padding:20px 12px;text-align:center;
   color:var(--warn);font-size:13px;font-weight:600;
@@ -130,10 +123,8 @@ body{
   animation:spin .7s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg);}}
-
 .emptyNote{padding:20px 12px;color:var(--muted);font-size:13px;text-align:center;
   line-height:1.55;}
-
 #embedFooter{
   flex:0 0 auto;padding:7px 12px;
   padding-bottom:calc(7px + env(safe-area-inset-bottom));
@@ -156,7 +147,6 @@ body{
   margin-left:auto;font-size:10px;color:#555;
   font-family:ui-monospace,Menlo,monospace;
 }
-
 #editorPane{flex:1 1 auto;display:flex;flex-direction:column;
   min-height:0;min-width:0;background:var(--bg);}
 #titleInput{
@@ -199,7 +189,6 @@ body{
 #preview img{max-width:100%;}
 #preview table{border-collapse:collapse;}
 #preview th,#preview td{border:1px solid var(--line);padding:6px 10px;}
-
 #preview a.wikilink{
   color:var(--accent);text-decoration:none;
   border-bottom:1px solid var(--accent);padding-bottom:1px;cursor:pointer;
@@ -208,7 +197,6 @@ body{
   color:var(--muted);border-bottom:1px dashed var(--muted);
 }
 #preview a.wikilink:active{background:rgba(167,139,250,.15);}
-
 #linkSuggest{
   flex:0 0 auto;display:none;gap:6px;padding:8px;
   background:var(--panel2);border-top:1px solid var(--line);
@@ -223,7 +211,6 @@ body{
 }
 .linkChip:active{background:var(--btn);color:#fff;border-color:var(--btn);}
 .linkChip.new{color:var(--accent);border-style:dashed;}
-
 #backlinksBar{
   flex:0 0 auto;display:none;gap:6px;padding:8px 10px;
   background:var(--panel);border-top:1px solid var(--line);
@@ -243,7 +230,6 @@ body{
   max-width:180px;overflow:hidden;text-overflow:ellipsis;
 }
 .backlinkChip:active{background:var(--btn);color:#fff;border-color:var(--btn);}
-
 #chatScrim{
   position:absolute;inset:0;background:rgba(0,0,0,.5);
   opacity:0;pointer-events:none;transition:opacity .22s;z-index:65;
@@ -268,7 +254,6 @@ body{
 }
 #chatHead > span:first-child{display:flex;align-items:center;flex-wrap:nowrap;min-width:0;flex:1 1 auto;overflow:hidden;}
 #chatHead .grp{display:flex;gap:5px;flex:0 0 auto;}
-
 .statePill{
   display:inline-block;margin-left:8px;
   padding:2px 8px;border-radius:10px;
@@ -283,14 +268,12 @@ body{
 .statePill.ready{background:#12331f;color:var(--ok);border-color:#1e5133;}
 .statePill.error{background:#3a1212;color:var(--err);border-color:#5a1e1e;}
 .statePill.busy{background:#1a1f3a;color:#7ba7ff;border-color:#2a3560;}
-
 .smallBtn{
   background:var(--panel2);border:1px solid var(--line);color:var(--text);
   border-radius:5px;padding:5px 9px;font-size:12px;cursor:pointer;
   white-space:nowrap;
 }
 .smallBtn:active{background:var(--btn);color:#fff;}
-
 #chatMessages{
   flex:1 1 auto;overflow-y:auto;padding:12px;
   display:flex;flex-direction:column;gap:10px;
@@ -321,7 +304,6 @@ body{
   cursor:pointer;
 }
 .src-chip:active{background:var(--btn);color:#fff;}
-
 #chatProgress{
   display:none;padding:10px 12px;font-size:13px;color:var(--muted);
   border-bottom:1px solid var(--line);
@@ -348,7 +330,6 @@ body{
 .quickChip:active{background:var(--btn);color:#fff;border-color:var(--btn);}
 .quickChip.fast{border-color:var(--accent);color:var(--accent);}
 .quickChip.fast.on{background:var(--accent);color:#fff;border-color:var(--accent);}
-
 #chatInputBar{
   flex:0 0 auto;display:flex;gap:8px;padding:10px 12px;
   padding-bottom:calc(10px + env(safe-area-inset-bottom));
@@ -363,28 +344,17 @@ body{
 #chatInput:focus{border-color:var(--accent);}
 #chatInput:disabled{opacity:.5;}
 
-#modelModal{
+/* ---- modals shared ---- */
+#modelModal,#menuModal,#syncModal{
   position:fixed;inset:0;display:none;align-items:center;justify-content:center;
   z-index:200;padding:16px;background:rgba(0,0,0,.7);
 }
-#modelModal.open{display:flex;}
-#modelCard{
-  width:100%;max-width:420px;max-height:82vh;overflow:auto;
+#modelModal.open,#menuModal.open,#syncModal.open{display:flex;}
+#modelCard,#menuCard,#syncCard{
+  width:100%;max-width:440px;max-height:86vh;overflow:auto;
   background:var(--panel);border:1px solid var(--line);border-radius:10px;
   padding:6px;-webkit-overflow-scrolling:touch;
 }
-
-#menuModal{
-  position:fixed;inset:0;display:none;align-items:center;justify-content:center;
-  z-index:200;padding:16px;background:rgba(0,0,0,.7);
-}
-#menuModal.open{display:flex;}
-#menuCard{
-  width:100%;max-width:420px;max-height:82vh;overflow:auto;
-  background:var(--panel);border:1px solid var(--line);border-radius:10px;
-  padding:6px;-webkit-overflow-scrolling:touch;
-}
-
 .mHead{
   padding:14px 14px 8px;font-size:11px;text-transform:uppercase;
   letter-spacing:.8px;color:var(--muted);font-weight:700;
@@ -412,10 +382,32 @@ body{
 .mBadge.warn{background:var(--warn);color:#2a1e00;}
 .mBadge.danger{background:var(--err);color:#fff;}
 
+/* sync modal internals */
+.syncBody{padding:4px 14px 14px;}
+.syncText{font-size:13px;line-height:1.55;color:var(--muted);margin:4px 0 12px 0;}
+.syncCode{
+  width:100%;height:90px;padding:9px 10px;
+  background:var(--panel2);color:var(--text);
+  border:1px solid var(--line);border-radius:6px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:11px;line-height:1.35;resize:none;outline:none;
+  word-break:break-all;
+}
+.syncCode:focus{border-color:var(--accent);}
+.syncBtns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.syncStatus{
+  margin-top:12px;padding:10px 12px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+  font-size:12px;color:var(--text);line-height:1.5;
+}
+.syncStatus .lbl{color:var(--muted);font-size:10px;letter-spacing:.5px;
+  text-transform:uppercase;font-weight:700;margin-bottom:4px;}
+.syncStatus.err{color:var(--err);}
+.syncStatus.ok{color:var(--ok);}
+.syncStep{color:var(--muted);font-size:11px;margin-bottom:8px;}
 #scrim{position:absolute;inset:0;background:rgba(0,0,0,.5);
   opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;}
 #scrim.show{opacity:1;pointer-events:auto;}
-
 @media (max-width: 700px){
   #sidebar{
     position:absolute;left:0;top:0;bottom:0;width:280px;z-index:100;
@@ -451,7 +443,7 @@ body{
       <div id="embedFooter" title="Tap to re-index all notes">
         <span id="embedDot"></span>
         <span id="embedStatusText">Search index: idle</span>
-        <span id="versionStamp">v14</span>
+        <span id="versionStamp">v15</span>
       </div>
     </aside>
     <section id="editorPane">
@@ -499,32 +491,29 @@ body{
 
 <div id="modelModal"><div id="modelCard"></div></div>
 <div id="menuModal"><div id="menuCard"></div></div>
+<div id="syncModal"><div id="syncCard"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<script src="./sync.js"></script>
 <script>
 "use strict";
 
-/* ============================================================
-   VERSION
-   ============================================================ */
-const APP_VERSION = 'v14';
+const APP_VERSION = 'v15';
 const EXPORT_VERSION = 1;
 console.log('[Cortex] App version:', APP_VERSION);
 
-/* ============================================================
-   PROMPT BUDGETS
-   ============================================================ */
 const MAX_CURRENT_NOTE_CHARS = 1500;
 const MAX_SOURCES = 2;
 const MAX_SOURCE_CHARS = 500;
 const RETRIEVAL_TIMEOUT_MS = 3000;
 const STORE_FAST_MODE = 'cortex.fastmode.v1';
+const TOMBSTONE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;   // 30 days
 
 let fastMode = false;
 try { fastMode = localStorage.getItem(STORE_FAST_MODE) === '1'; } catch(e){}
 
 /* ============================================================
-   1. IndexedDB
+   IndexedDB
    ============================================================ */
 
 const DB_NAME = 'cortex-db';
@@ -636,54 +625,46 @@ async function dbGetAllEmbeddings(){
 }
 
 /* ============================================================
-   2. Model catalog + device detection
+   Model catalog + device
    ============================================================ */
 
 const MODEL_CATALOG = {
-  tiny:   { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',  label: 'Tiny',   subtitle: 'Qwen 2.5 · 0.5B', size: '~350 MB', desc: 'Fastest. Answers are basic. Phone stays snappy.', minMemory: 0 },
-  small:  { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',  label: 'Small',  subtitle: 'Llama 3.2 · 1B',  size: '~700 MB', desc: 'Good balance. Recommended default on phones.', minMemory: 4 },
-  medium: { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',  label: 'Medium', subtitle: 'Llama 3.2 · 3B',  size: '~2 GB',   desc: 'Smarter but heavy. Can lag the phone. Fine on laptops.', minMemory: 8 },
+  tiny:   { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',  label: 'Tiny',   subtitle: 'Qwen 2.5 · 0.5B', size: '~350 MB', desc: 'Fastest. Answers are basic.', minMemory: 0 },
+  small:  { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',  label: 'Small',  subtitle: 'Llama 3.2 · 1B',  size: '~700 MB', desc: 'Balanced. Default on phones.', minMemory: 4 },
+  medium: { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',  label: 'Medium', subtitle: 'Llama 3.2 · 3B',  size: '~2 GB',   desc: 'Smarter but heavy. Fine on laptops.', minMemory: 8 },
 };
-
 function detectDevice(){
   return {
     memory: (typeof navigator.deviceMemory === 'number') ? navigator.deviceMemory : null,
     cores: navigator.hardwareConcurrency || null,
     webgpu: ('gpu' in navigator),
-    userAgent: navigator.userAgent,
     isMobile: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent),
   };
 }
 function recommendModel(specs){
-  if (!specs.webgpu) return { tier: null, reason: 'WebGPU not available — AI features disabled.' };
-  // Desktop: recommend Medium. Mobile: recommend Small.
+  if (!specs.webgpu) return { tier: null, reason: 'WebGPU not available.' };
   if (!specs.isMobile) return { tier: 'medium', reason: 'Desktop detected — Medium recommended.' };
-  if (specs.memory === null) return { tier: 'small', reason: 'Memory info unavailable — defaulting to Small.' };
-  if (specs.memory >= 8) return { tier: 'small', reason: '8+ GB RAM — Small keeps things snappy. Switch to Medium in Model menu for more quality.' };
+  if (specs.memory === null) return { tier: 'small', reason: 'Memory info unavailable.' };
+  if (specs.memory >= 8) return { tier: 'small', reason: '8+ GB RAM — Small keeps things snappy.' };
   if (specs.memory >= 4) return { tier: 'small', reason: '4–8 GB RAM — Small is the sweet spot.' };
-  return { tier: 'tiny', reason: 'Under 4 GB RAM — Tiny for stability.' };
+  return { tier: 'tiny', reason: 'Under 4 GB RAM — Tiny.' };
 }
-
 const DEVICE = detectDevice();
 const RECOMMEND = recommendModel(DEVICE);
-
 const STORE_MODEL_TIER = 'cortex.model.tier.v1';
 function loadSavedTier(){
   try { const t = localStorage.getItem(STORE_MODEL_TIER); if (t && MODEL_CATALOG[t]) return t; } catch(e){}
   return RECOMMEND.tier || 'small';
 }
 function saveTier(tier){ try { localStorage.setItem(STORE_MODEL_TIER, tier); } catch(e){} }
-
 let CURRENT_TIER = loadSavedTier();
 let MODEL_ID = MODEL_CATALOG[CURRENT_TIER].id;
 
-console.log('[Cortex] Device:', DEVICE, 'Recommend:', RECOMMEND, 'Tier:', CURRENT_TIER);
-
 /* ============================================================
-   3. State
+   State
    ============================================================ */
 
-let notes = [];
+let notes = [];              // includes tombstones
 let activeId = null;
 let view = 'edit';
 
@@ -700,8 +681,10 @@ let semanticSearching = false;
 
 const SEMANTIC_THRESHOLD = 0.20;
 
+function visibleNotes(){ return notes.filter(n => !n.deleted); }
+
 /* ============================================================
-   4. DOM
+   DOM
    ============================================================ */
 
 const editor       = document.getElementById('editor');
@@ -734,9 +717,11 @@ const modelModal   = document.getElementById('modelModal');
 const modelCard    = document.getElementById('modelCard');
 const menuModal    = document.getElementById('menuModal');
 const menuCard     = document.getElementById('menuCard');
+const syncModal    = document.getElementById('syncModal');
+const syncCard     = document.getElementById('syncCard');
 
 /* ============================================================
-   5. Helpers
+   Helpers
    ============================================================ */
 
 function uid(){
@@ -751,8 +736,7 @@ function formatTime(ts){
   if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
   return new Date(ts).toLocaleDateString();
 }
-function activeNote(){ return notes.find(n => n.id === activeId) || null; }
-
+function activeNote(){ return notes.find(n => n.id === activeId && !n.deleted) || null; }
 function escapeHTML(s){
   return String(s).replace(/[&<>"']/g, c =>
     c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' :
@@ -791,7 +775,7 @@ function withTimeout(promise, ms, fallback){
 }
 
 /* ============================================================
-   6. Wiki links
+   Wiki links
    ============================================================ */
 
 const WIKI_RE = /\[\[([^\[\]|]+?)(?:\|([^\[\]]+?))?\]\]/g;
@@ -813,7 +797,7 @@ function extractWikiLinks(body){
 function noteByTitle(title){
   if (!title) return null;
   const t = title.toLowerCase();
-  return notes.find(n => (n.title || '').toLowerCase() === t) || null;
+  return visibleNotes().find(n => (n.title || '').toLowerCase() === t) || null;
 }
 function preprocessWikiLinks(md){
   const stash = [];
@@ -841,11 +825,10 @@ function styleWikiLinks(){
 }
 
 /* ============================================================
-   7. Embeddings
+   Embeddings
    ============================================================ */
 
 const EMBED_MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
-
 let embedder = null;
 let embedderLoading = null;
 let embedStatus = 'idle';
@@ -855,9 +838,8 @@ const embedPending = new Set();
 
 function updateEmbedStatusUI(){
   let cls = '', text = '';
-  const total = notes.length;
+  const total = visibleNotes().length;
   const indexed = window.__indexedCount || 0;
-
   if (embedStatus === 'idle'){ text = 'Search index: idle'; }
   else if (embedStatus === 'loading'){ cls = 'loading'; text = embedProgressText || 'Loading embedder...'; }
   else if (embedStatus === 'ready'){ cls = 'ready'; text = 'Search index: ' + indexed + '/' + total; }
@@ -872,42 +854,31 @@ function updateEmbedStatusUI(){
   embedStatusText.textContent = text;
   versionStamp.textContent = APP_VERSION;
 }
-
 async function refreshEmbedCount(){
-  try {
-    const all = await dbGetAllEmbeddings();
-    window.__indexedCount = all.length;
-  } catch(e){ window.__indexedCount = 0; }
+  try { const all = await dbGetAllEmbeddings(); window.__indexedCount = all.length; }
+  catch(e){ window.__indexedCount = 0; }
   updateEmbedStatusUI();
 }
-
 async function loadEmbedder(){
   if (embedder) return embedder;
   if (embedderLoading) return embedderLoading;
-
   embedStatus = 'loading';
   embedProgressText = 'Loading embedder...';
   updateEmbedStatusUI();
-
   embedderLoading = (async () => {
     try {
       const tf = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/+esm');
       tf.env.allowLocalModels = false;
       tf.env.useBrowserCache = true;
-
       const pipe = await tf.pipeline('feature-extraction', EMBED_MODEL_ID, {
         progress_callback: (info) => {
           if (info && info.status === 'progress' && info.total){
             const pct = Math.round((info.loaded / info.total) * 100);
             embedProgressText = 'Downloading embedder ' + pct + '%';
             updateEmbedStatusUI();
-          } else if (info && info.status === 'ready'){
-            embedProgressText = 'Embedder ready';
-            updateEmbedStatusUI();
           }
         },
       });
-
       embedder = pipe;
       embedStatus = 'ready';
       embedProgressText = '';
@@ -921,37 +892,35 @@ async function loadEmbedder(){
       throw err;
     }
   })();
-
   return embedderLoading;
 }
-
 async function embedText(text){
   const pipe = await loadEmbedder();
   const out = await pipe(text, { pooling: 'mean', normalize: true });
   return new Float32Array(out.data);
 }
-
 async function runEmbed(noteId, force){
   const note = notes.find(n => n.id === noteId);
   if (!note) return;
+  if (note.deleted){
+    try { await dbDeleteEmbedding(noteId); } catch(e){}
+    return;
+  }
   const body = note.body || '';
   if (!body.trim()){
     try { await dbDeleteEmbedding(noteId); } catch(e){}
     return;
   }
   const hash = simpleHash(body);
-
   if (!force){
     try {
       const existing = await dbGetEmbedding(noteId);
       if (existing && existing.hash === hash) return;
     } catch(e){}
   }
-
   embedPending.add(noteId);
   embedStatus = 'working';
   updateEmbedStatusUI();
-
   try {
     const vec = await embedText(body);
     await dbPutEmbedding({ id: noteId, vector: vec, hash: hash, updated: Date.now() });
@@ -965,7 +934,6 @@ async function runEmbed(noteId, force){
     updateEmbedStatusUI();
   }
 }
-
 function scheduleEmbed(noteId){
   if (!noteId) return;
   const prev = embedTimers.get(noteId);
@@ -976,25 +944,22 @@ function scheduleEmbed(noteId){
   }, 5000);
   embedTimers.set(noteId, t);
 }
-
 async function embedSweep(){
   await refreshEmbedCount();
   const all = await dbGetAllEmbeddings();
   const map = new Map(all.map(e => [e.id, e]));
-  for (const note of notes){
+  for (const note of visibleNotes()){
     const cur = map.get(note.id);
     const h = simpleHash(note.body || '');
     if (!cur || cur.hash !== h) scheduleEmbed(note.id);
   }
 }
-
 async function reindexAll(){
   try {
     await loadEmbedder();
-    for (const note of notes) await runEmbed(note.id, true);
+    for (const note of visibleNotes()) await runEmbed(note.id, true);
   } catch(e){ console.warn('reindex failed:', e); }
 }
-
 async function semanticSearch(query, limit){
   limit = limit || 10;
   if (!query || !query.trim()) return [];
@@ -1003,16 +968,16 @@ async function semanticSearch(query, limit){
   const scored = [];
   for (const rec of all){
     const note = notes.find(n => n.id === rec.id);
-    if (!note || !rec.vector) continue;
+    if (!note || note.deleted || !rec.vector) continue;
     const score = dot(qVec, rec.vector);
-    scored.push({ note: note, score: score });
+    scored.push({ note, score });
   }
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, limit);
 }
 
 /* ============================================================
-   8. Sidebar
+   Sidebar
    ============================================================ */
 
 function updateSearchStatus(){
@@ -1043,13 +1008,13 @@ function updateSearchStatus(){
 
 function renderNoteList(){
   const q = searchBox.value.trim();
-
+  const visible = visibleNotes();
   let items = [];
   let showSearchingRow = false;
 
   if (searchMode === 'semantic'){
     if (!q){
-      items = [...notes].sort((a, b) => b.updated - a.updated).map(n => ({ note: n }));
+      items = [...visible].sort((a, b) => b.updated - a.updated).map(n => ({ note: n }));
     } else if (semanticSearching || q !== semanticQuery){
       showSearchingRow = true;
       items = semanticResults.map(r => ({ note: r.note, score: r.score }));
@@ -1058,7 +1023,7 @@ function renderNoteList(){
     }
   } else {
     const lq = q.toLowerCase();
-    const sorted = [...notes].sort((a, b) => b.updated - a.updated);
+    const sorted = [...visible].sort((a, b) => b.updated - a.updated);
     const filtered = lq
       ? sorted.filter(n =>
           (n.title || '').toLowerCase().includes(lq) ||
@@ -1068,32 +1033,25 @@ function renderNoteList(){
   }
 
   noteList.textContent = '';
-
   if (showSearchingRow){
     const row = document.createElement('div');
     row.className = 'searchingRow';
     row.innerHTML = '<span class="spinner"></span> Searching…';
     noteList.appendChild(row);
   }
-
   for (const item of items){
     const note = item.note;
     const score = item.score;
-
     const el = document.createElement('div');
     el.className = 'noteItem' + (note.id === activeId ? ' active' : '');
-
     const title = document.createElement('div');
     title.className = 'noteTitle';
     title.textContent = note.title || 'Untitled';
-
     const meta = document.createElement('div');
     meta.className = 'noteMeta';
-
     const time = document.createElement('span');
     time.textContent = formatTime(note.updated);
     meta.appendChild(time);
-
     const bl = findBacklinks(note.id);
     if (bl.length){
       const badge = document.createElement('span');
@@ -1101,7 +1059,6 @@ function renderNoteList(){
       badge.textContent = '← ' + bl.length;
       meta.appendChild(badge);
     }
-
     if (searchMode === 'semantic' && q && typeof score === 'number'){
       const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
       const sb = document.createElement('span');
@@ -1109,13 +1066,11 @@ function renderNoteList(){
       sb.textContent = pct + '%';
       meta.appendChild(sb);
     }
-
     el.appendChild(title);
     el.appendChild(meta);
     el.addEventListener('click', () => switchNote(note.id));
     noteList.appendChild(el);
   }
-
   if (!items.length && !showSearchingRow){
     const empty = document.createElement('div');
     empty.className = 'emptyNote';
@@ -1128,12 +1083,10 @@ function renderNoteList(){
     }
     noteList.appendChild(empty);
   }
-
   updateSearchStatus();
 }
 
 let semanticDebounce = null;
-
 async function runSemanticQuery(){
   const q = searchBox.value.trim();
   if (!q){
@@ -1148,23 +1101,19 @@ async function runSemanticQuery(){
     searchStatus.innerHTML = '<span class="dot"></span> Embedder not ready';
     return;
   }
-
   semanticSearching = true;
   renderNoteList();
-
   try {
     const results = await semanticSearch(q, 50);
     const filtered = results.filter(r => r.score >= SEMANTIC_THRESHOLD);
     semanticQuery = q;
     semanticResults = filtered;
-  } catch(e){
-    console.warn('[Cortex] semantic search failed:', e);
-  } finally {
+  } catch(e){ console.warn('[Cortex] semantic search failed:', e); }
+  finally {
     semanticSearching = false;
     renderNoteList();
   }
 }
-
 function toggleSearchMode(){
   if (searchMode === 'keyword'){
     searchMode = 'semantic';
@@ -1184,21 +1133,20 @@ function toggleSearchMode(){
     renderNoteList();
   }
 }
-
 function openSidebar(){ sidebar.classList.add('open'); scrim.classList.add('show'); }
 function closeSidebar(){ sidebar.classList.remove('open'); scrim.classList.remove('show'); }
 
 /* ============================================================
-   9. Backlinks
+   Backlinks
    ============================================================ */
 
 function findBacklinks(noteId){
   const note = notes.find(n => n.id === noteId);
-  if (!note) return [];
+  if (!note || note.deleted) return [];
   const title = (note.title || '').toLowerCase();
   if (!title || title === 'untitled') return [];
   const out = [];
-  for (const other of notes){
+  for (const other of visibleNotes()){
     if (other.id === noteId) continue;
     const links = extractWikiLinks(other.body || '');
     if (links.some(l => l.target.toLowerCase() === title)) out.push(other);
@@ -1226,7 +1174,7 @@ function renderBacklinks(){
 }
 
 /* ============================================================
-   10. Note CRUD
+   Note CRUD (with tombstones)
    ============================================================ */
 
 async function saveNote(){
@@ -1251,11 +1199,11 @@ function scheduleSave(){
 async function switchNote(id){
   if (id === activeId){ closeSidebar(); return; }
   await saveNote();
+  const target = notes.find(n => n.id === id);
+  if (!target || target.deleted) return;
   activeId = id;
-  const n = activeNote();
-  if (!n) return;
-  titleInput.value = n.title === 'Untitled' ? '' : (n.title || '');
-  editor.value = n.body || '';
+  titleInput.value = target.title === 'Untitled' ? '' : (target.title || '');
+  editor.value = target.body || '';
   editor.scrollTop = 0;
   linkSuggest.style.display = 'none';
   renderNoteList();
@@ -1289,12 +1237,17 @@ async function deleteActiveNote(){
   if (!n) return;
   const label = n.title && n.title !== 'Untitled' ? '"' + n.title + '"' : 'this note';
   if (!confirm('Delete ' + label + '? This cannot be undone.')) return;
-  try { await dbDelete(n.id); } catch(e){}
+  const now = Date.now();
+  n.deleted = true;
+  n.deletedAt = now;
+  n.updated = now;
+  try { await dbPut(n); } catch(e){}
   try { await dbDeleteEmbedding(n.id); } catch(e){}
-  notes = notes.filter(x => x.id !== n.id);
   await refreshEmbedCount();
-  if (!notes.length){ await createNote(); return; }
-  const next = [...notes].sort((a, b) => b.updated - a.updated)[0];
+
+  const remaining = visibleNotes();
+  if (!remaining.length){ await createNote(); return; }
+  const next = [...remaining].sort((a, b) => b.updated - a.updated)[0];
   activeId = next.id;
   titleInput.value = next.title === 'Untitled' ? '' : (next.title || '');
   editor.value = next.body || '';
@@ -1303,9 +1256,18 @@ async function deleteActiveNote(){
   renderBacklinks();
   if (view === 'preview') updatePreview();
 }
+async function purgeOldTombstones(){
+  const cutoff = Date.now() - TOMBSTONE_MAX_AGE_MS;
+  const dead = notes.filter(n => n.deleted && (n.deletedAt || n.updated) < cutoff);
+  if (!dead.length) return;
+  for (const n of dead){
+    try { await dbDelete(n.id); } catch(e){}
+  }
+  notes = notes.filter(n => !(n.deleted && (n.deletedAt || n.updated) < cutoff));
+}
 
 /* ============================================================
-   11. Wiki link navigation + autocomplete
+   Wiki link nav + autocomplete
    ============================================================ */
 
 async function navigateToWikiLink(target){
@@ -1327,7 +1289,7 @@ function renderLinkSuggest(){
   const ctx = checkLinkAutocomplete();
   if (!ctx){ linkSuggest.style.display = 'none'; return; }
   const q = ctx.query.trim().toLowerCase();
-  let matches = notes
+  let matches = visibleNotes()
     .filter(n => n.id !== activeId)
     .filter(n => {
       const t = (n.title || 'Untitled').toLowerCase();
@@ -1376,7 +1338,7 @@ function insertLinkSuggestion(ctx, title){
 }
 
 /* ============================================================
-   12. Preview
+   Preview
    ============================================================ */
 
 if (window.marked && window.marked.use){
@@ -1421,7 +1383,7 @@ preview.addEventListener('click', (e) => {
 });
 
 /* ============================================================
-   13. Menu modal
+   Menu modal
    ============================================================ */
 
 function openMenu(){ renderMenu(); menuModal.classList.add('open'); }
@@ -1456,71 +1418,80 @@ function menuItem({ label, desc, badge, badgeClass, onClick, disabled }){
 
 function renderMenu(){
   menuCard.textContent = '';
+  const vn = visibleNotes().length;
+  const tomb = notes.length - vn;
 
   const h1 = document.createElement('div');
   h1.className = 'mHead';
-  h1.textContent = 'Workspace';
+  h1.textContent = 'Sync';
   menuCard.appendChild(h1);
 
   menuCard.appendChild(menuItem({
+    label: '🔗  Sync across devices',
+    desc: 'Peer-to-peer over Wi-Fi. No server.',
+    onClick: () => { closeMenu(); openSyncModal(); },
+  }));
+
+  const h2 = document.createElement('div');
+  h2.className = 'mHead';
+  h2.textContent = 'Workspace';
+  menuCard.appendChild(h2);
+
+  menuCard.appendChild(menuItem({
     label: '⬇  Export workspace',
-    desc: 'Download all ' + notes.length + ' notes as a .json backup.',
+    desc: 'Download ' + vn + ' notes as a .json backup.',
     onClick: () => { closeMenu(); exportWorkspace(); },
   }));
 
   menuCard.appendChild(menuItem({
     label: '⬆  Import workspace',
-    desc: 'Replace all notes with the contents of a .json file.',
-    badge: 'replaces',
-    badgeClass: 'danger',
+    desc: 'Replace all notes with a .json file.',
+    badge: 'replaces', badgeClass: 'danger',
     onClick: () => { closeMenu(); importWorkspace(); },
   }));
 
-  const h2 = document.createElement('div');
-  h2.className = 'mHead';
-  h2.textContent = 'Search index';
-  menuCard.appendChild(h2);
+  const h3 = document.createElement('div');
+  h3.className = 'mHead';
+  h3.textContent = 'Search index';
+  menuCard.appendChild(h3);
 
   menuCard.appendChild(menuItem({
     label: '🔄  Re-index all notes',
-    desc: 'Recompute embeddings. Takes a few seconds for a small collection.',
+    desc: 'Recompute embeddings.',
     onClick: () => { closeMenu(); reindexAll(); },
   }));
 
   menuCard.appendChild(menuItem({
     label: '🗑  Delete search index',
-    desc: 'Wipes the embedding store. Notes are kept. Rebuilds on next edit.',
+    desc: 'Wipes embeddings. Notes are kept.',
     onClick: async () => {
       closeMenu();
-      if (!confirm('Delete the search index? Notes are kept; the index rebuilds automatically.')) return;
+      if (!confirm('Delete the search index?')) return;
       await dbClearEmbeddings();
       await refreshEmbedCount();
       renderNoteList();
     },
   }));
 
-  const h3 = document.createElement('div');
-  h3.className = 'mHead';
-  h3.textContent = 'About';
-  menuCard.appendChild(h3);
+  const h4 = document.createElement('div');
+  h4.className = 'mHead';
+  h4.textContent = 'About';
+  menuCard.appendChild(h4);
 
   menuCard.appendChild(menuItem({
     label: 'Cortex ' + APP_VERSION,
-    desc: notes.length + ' notes · ' + (window.__indexedCount || 0) + ' indexed · ' +
-          CURRENT_TIER + ' model · ' + (DEVICE.memory !== null ? DEVICE.memory + ' GB RAM' : 'unknown RAM') +
+    desc: vn + ' notes' + (tomb ? ' (+' + tomb + ' deleted)' : '') + ' · ' +
+          (window.__indexedCount || 0) + ' indexed · ' + CURRENT_TIER + ' model' +
           (DEVICE.isMobile ? ' · mobile' : ' · desktop'),
     onClick: () => { closeMenu(); showMemoryInfo(); },
   }));
 
-  menuCard.appendChild(menuItem({
-    label: 'Close', onClick: () => closeMenu(),
-  }));
+  menuCard.appendChild(menuItem({ label: 'Close', onClick: () => closeMenu() }));
 }
-
 document.getElementById('btnMenu').addEventListener('click', openMenu);
 
 /* ============================================================
-   14. Export / Import
+   Export / Import
    ============================================================ */
 
 function exportWorkspace(){
@@ -1535,13 +1506,11 @@ function exportWorkspace(){
       body: n.body || '',
       created: n.created || Date.now(),
       updated: n.updated || Date.now(),
+      deleted: !!n.deleted,
+      deletedAt: n.deletedAt || null,
     })),
-    settings: {
-      modelTier: CURRENT_TIER,
-      fastMode: fastMode,
-    },
+    settings: { modelTier: CURRENT_TIER, fastMode: fastMode },
   };
-
   const json = JSON.stringify(payload, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1549,9 +1518,7 @@ function exportWorkspace(){
   const stamp = new Date().toISOString().slice(0, 10);
   a.href = url;
   a.download = 'cortex-' + stamp + '.json';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
@@ -1562,23 +1529,15 @@ function importWorkspace(){
   input.onchange = () => {
     const f = input.files[0];
     if (!f) return;
-    if (f.size > 20 * 1024 * 1024){
-      alert('File is too large. Cortex workspaces should be under 20 MB.');
-      return;
-    }
+    if (f.size > 20 * 1024 * 1024){ alert('File is too large.'); return; }
     const r = new FileReader();
     r.onerror = () => alert('Could not read the file.');
     r.onload = () => {
       let data;
-      try {
-        data = JSON.parse(String(r.result || ''));
-      } catch(e){
-        alert('That is not a valid JSON file.');
-        return;
-      }
+      try { data = JSON.parse(String(r.result || '')); }
+      catch(e){ alert('Not valid JSON.'); return; }
       if (!data || data.app !== 'cortex' || !Array.isArray(data.notes)){
-        alert('This is not a Cortex workspace file.');
-        return;
+        alert('Not a Cortex workspace file.'); return;
       }
       const cleaned = [];
       for (const n of data.notes){
@@ -1588,27 +1547,18 @@ function importWorkspace(){
         const body = (typeof n.body === 'string') ? n.body.slice(0, 5 * 1024 * 1024) : '';
         const created = (typeof n.created === 'number') ? n.created : Date.now();
         const updated = (typeof n.updated === 'number') ? n.updated : created;
-        cleaned.push({ id, title, body, created, updated });
+        const deleted = !!n.deleted;
+        const deletedAt = (typeof n.deletedAt === 'number') ? n.deletedAt : null;
+        cleaned.push({ id, title, body, created, updated, deleted, deletedAt });
       }
-      if (!cleaned.length){
-        alert('No notes found in that file.');
-        return;
-      }
-      const msg =
-        'Import ' + cleaned.length + ' note' + (cleaned.length === 1 ? '' : 's') + '?\n\n' +
-        'This will REPLACE all ' + notes.length + ' note' + (notes.length === 1 ? '' : 's') +
-        ' currently in Cortex. Your current notes will be permanently lost ' +
-        'unless you exported them first.\n\n' +
-        'Continue?';
+      if (!cleaned.length){ alert('No notes found.'); return; }
+      const msg = 'Import ' + cleaned.length + ' notes?\n\nThis REPLACES all current notes.\n\nContinue?';
       if (!confirm(msg)) return;
-
       (async () => {
         try {
           await dbClearNotes();
           await dbClearEmbeddings();
-          for (const n of cleaned){
-            await dbPut(n);
-          }
+          for (const n of cleaned) await dbPut(n);
           if (data.settings && data.settings.modelTier && MODEL_CATALOG[data.settings.modelTier]){
             CURRENT_TIER = data.settings.modelTier;
             MODEL_ID = MODEL_CATALOG[CURRENT_TIER].id;
@@ -1616,9 +1566,9 @@ function importWorkspace(){
           }
           notes = await dbGetAll();
           await refreshEmbedCount();
-          const sorted = [...notes].sort((a, b) => b.updated - a.updated);
-          if (sorted.length){
-            activeId = sorted[0].id;
+          const vis = visibleNotes();
+          if (vis.length){
+            activeId = [...vis].sort((a, b) => b.updated - a.updated)[0].id;
             const n = activeNote();
             titleInput.value = n.title === 'Untitled' ? '' : (n.title || '');
             editor.value = n.body || '';
@@ -1628,7 +1578,7 @@ function importWorkspace(){
           renderBacklinks();
           if (view === 'preview') updatePreview();
           embedSweep().catch(() => {});
-          alert('Imported ' + cleaned.length + ' note' + (cleaned.length === 1 ? '' : 's') + '.');
+          alert('Imported ' + cleaned.length + ' notes.');
         } catch(err){
           alert('Import failed: ' + (err && err.message ? err.message : err));
         }
@@ -1640,7 +1590,7 @@ function importWorkspace(){
 }
 
 /* ============================================================
-   15. Model picker modal
+   Model picker
    ============================================================ */
 
 function setModelState(state, label){
@@ -1659,7 +1609,6 @@ function renderModelOptions(){
   head.className = 'mHead';
   head.textContent = 'Choose a model';
   modelCard.appendChild(head);
-
   for (const tier of ['tiny', 'small', 'medium']){
     const m = MODEL_CATALOG[tier];
     const isCurrent = (tier === CURRENT_TIER);
@@ -1688,29 +1637,19 @@ function renderModelOptions(){
     main.appendChild(label); main.appendChild(desc);
     item.appendChild(main);
     item.addEventListener('click', () => {
-      if (item.classList.contains('disabled')){
-        alert('This model needs more RAM than your device reports.');
-        return;
-      }
+      if (item.classList.contains('disabled')){ alert('Not enough RAM.'); return; }
       selectModel(tier);
     });
     modelCard.appendChild(item);
   }
-
   const info = document.createElement('div');
   info.className = 'mHead';
-  info.style.textTransform = 'none';
-  info.style.letterSpacing = '0';
-  info.style.fontWeight = '400';
-  info.style.color = 'var(--muted)';
-  info.style.fontSize = '12px';
-  info.style.lineHeight = '1.5';
+  info.style.textTransform = 'none'; info.style.letterSpacing = '0';
+  info.style.fontWeight = '400'; info.style.color = 'var(--muted)';
+  info.style.fontSize = '12px'; info.style.lineHeight = '1.5';
   const mem = DEVICE.memory !== null ? DEVICE.memory + ' GB' : 'unknown';
-  const cores = DEVICE.cores || '?';
-  const form = DEVICE.isMobile ? 'mobile' : 'desktop';
-  info.textContent = 'Device: ' + form + ', ' + mem + ' RAM, ' + cores + ' cores. ' + RECOMMEND.reason;
+  info.textContent = 'Device: ' + (DEVICE.isMobile ? 'mobile' : 'desktop') + ', ' + mem + ' RAM. ' + RECOMMEND.reason;
   modelCard.appendChild(info);
-
   const memBtn = document.createElement('div');
   memBtn.className = 'mItem';
   const memMain = document.createElement('div');
@@ -1720,7 +1659,7 @@ function renderModelOptions(){
   memLabel.textContent = 'Memory & state info';
   const memDesc = document.createElement('div');
   memDesc.className = 'mDesc';
-  memDesc.textContent = 'Show current model state, JS heap usage, and cache hints.';
+  memDesc.textContent = 'Show model state, JS heap, cache hints.';
   memMain.appendChild(memLabel); memMain.appendChild(memDesc);
   memBtn.appendChild(memMain);
   memBtn.addEventListener('click', () => { closeModelModal(); showMemoryInfo(); });
@@ -1731,16 +1670,11 @@ async function selectModel(tier){
   if (!MODEL_CATALOG[tier]) return;
   if (tier === CURRENT_TIER && llmEngine){ closeModelModal(); return; }
   const label = MODEL_CATALOG[tier].label;
-  const confirmed = confirm(
-    'Switch to ' + label + '?\n\n' +
-    'If the model is not yet cached, this will download ' + MODEL_CATALOG[tier].size + '.'
-  );
-  if (!confirmed) return;
+  if (!confirm('Switch to ' + label + '?\n\nIf not cached, downloads ' + MODEL_CATALOG[tier].size + '.')) return;
   closeModelModal();
   CURRENT_TIER = tier;
   MODEL_ID = MODEL_CATALOG[tier].id;
   saveTier(tier);
-  console.log('[Cortex] Switched to tier:', tier, '->', MODEL_ID);
   await unloadModel();
   chatMessages.textContent = '';
   appendMessage('system', 'Loading ' + label + ' (' + MODEL_CATALOG[tier].size + ')...');
@@ -1748,15 +1682,12 @@ async function selectModel(tier){
 }
 
 /* ============================================================
-   16. Chat — WebLLM + RAG
+   Chat — WebLLM + RAG
    ============================================================ */
 
 function updateFastChip(){
-  if (fastMode){
-    chipFast.classList.add('on');
-  } else {
-    chipFast.classList.remove('on');
-  }
+  if (fastMode) chipFast.classList.add('on');
+  else chipFast.classList.remove('on');
 }
 chipFast.addEventListener('click', () => {
   fastMode = !fastMode;
@@ -1808,47 +1739,36 @@ function attachSources(msgEl, sources){
   }
   msgEl.appendChild(src);
 }
-
 function showChatProgress(text, fraction){
   chatProgress.style.display = 'block';
   chatProgressText.textContent = text || 'Loading...';
-  if (typeof fraction === 'number'){
-    chatProgressBar.style.width = Math.round(fraction * 100) + '%';
-  }
+  if (typeof fraction === 'number') chatProgressBar.style.width = Math.round(fraction * 100) + '%';
 }
 function hideChatProgress(){
   chatProgress.style.display = 'none';
   chatProgressBar.style.width = '0%';
 }
-
 async function startEngineLoad(){
   if (llmEngine) return llmEngine;
   if (llmLoadingPromise) return llmLoadingPromise;
   if (!('gpu' in navigator)){
     setModelState('error', 'no gpu');
-    appendMessage('system', 'WebGPU is not available in this browser.');
-    chatInput.disabled = true;
-    btnSend.disabled = true;
+    appendMessage('system', 'WebGPU not available.');
+    chatInput.disabled = true; btnSend.disabled = true;
     return null;
   }
   const tierInfo = MODEL_CATALOG[CURRENT_TIER];
   const deviceEl = document.getElementById('chatProgressDevice');
   if (deviceEl){
-    deviceEl.textContent = DEVICE.memory !== null
-      ? 'Detected: ' + (DEVICE.isMobile ? 'mobile' : 'desktop') + ', ' +
-        DEVICE.memory + ' GB RAM, ' + (DEVICE.cores || '?') + ' cores. Loading ' +
-        tierInfo.label + ' (' + tierInfo.size + ').'
-      : 'Device memory not exposed. Loading ' + tierInfo.label + ' (' + tierInfo.size + ').';
+    deviceEl.textContent = 'Loading ' + tierInfo.label + ' (' + tierInfo.size + ').';
   }
   setModelState('loading', 'loading');
-  showChatProgress('Downloading model (' + tierInfo.size + '). This happens once.', 0);
+  showChatProgress('Downloading model (' + tierInfo.size + '). One time.', 0);
   const myGen = ++llmGeneration;
   llmLoadingPromise = (async () => {
     try {
       const webllm = await import('https://esm.run/@mlc-ai/web-llm@0.2.78');
-      if (!webllm || typeof webllm.CreateMLCEngine !== 'function'){
-        throw new Error('WebLLM loaded but CreateMLCEngine missing.');
-      }
+      if (!webllm || typeof webllm.CreateMLCEngine !== 'function') throw new Error('WebLLM missing CreateMLCEngine.');
       const baseList = (webllm.prebuiltAppConfig && webllm.prebuiltAppConfig.model_list) || [];
       if (!baseList.length) throw new Error('Empty model list.');
       const engine = await webllm.CreateMLCEngine(MODEL_ID, {
@@ -1865,7 +1785,7 @@ async function startEngineLoad(){
       chatInput.disabled = false;
       btnSend.disabled = false;
       setModelState('ready', 'ready');
-      appendMessage('system', tierInfo.label + ' model ready. Ask anything about your notes.');
+      appendMessage('system', tierInfo.label + ' model ready.');
       return engine;
     } catch(err){
       if (myGen !== llmGeneration) return null;
@@ -1874,39 +1794,34 @@ async function startEngineLoad(){
       const msg = (err && err.message) ? err.message : String(err);
       console.error('[Cortex] Model load failed:', err);
       appendMessage('system', 'Could not load model: ' + msg);
-      chatInput.disabled = true;
-      btnSend.disabled = true;
+      chatInput.disabled = true; btnSend.disabled = true;
       llmLoadingPromise = null;
       return null;
     }
   })();
   return llmLoadingPromise;
 }
-
 async function unloadModel(){
   llmGeneration++;
   const wasReady = !!llmEngine;
   try { if (llmEngine && typeof llmEngine.unload === 'function') await llmEngine.unload(); } catch(e){}
-  llmEngine = null;
-  llmLoadingPromise = null;
+  llmEngine = null; llmLoadingPromise = null;
   chatHistory = [];
   chatMessages.textContent = '';
   hideChatProgress();
-  chatInput.disabled = true;
-  btnSend.disabled = true;
+  chatInput.disabled = true; btnSend.disabled = true;
   setModelState('', 'idle');
-  if (wasReady) appendMessage('system', 'Model unloaded. Memory freed.');
+  if (wasReady) appendMessage('system', 'Model unloaded.');
 }
-
 function showMemoryInfo(){
   const used = (typeof performance !== 'undefined' && performance.memory)
-    ? (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1) + ' MB' : 'not available';
+    ? (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1) + ' MB' : 'n/a';
   const limit = (typeof performance !== 'undefined' && performance.memory)
     ? (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(0) + ' MB' : 'n/a';
   const dev = navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'not exposed';
   const cores = navigator.hardwareConcurrency || 'unknown';
   const state = llmEngine ? 'LOADED' : 'not loaded';
-  const emb = embedStatus + ' (' + (window.__indexedCount || 0) + ' notes indexed)';
+  const emb = embedStatus + ' (' + (window.__indexedCount || 0) + ' indexed)';
   alert(
     'App version: ' + APP_VERSION + '\n' +
     'Platform: ' + (DEVICE.isMobile ? 'mobile' : 'desktop') + '\n' +
@@ -1915,13 +1830,11 @@ function showMemoryInfo(){
     'Model ID: ' + MODEL_ID + '\n' +
     'Fast mode: ' + (fastMode ? 'ON (no RAG)' : 'off') + '\n' +
     'Embedder: ' + emb + '\n' +
-    'JS heap used: ' + used + ' / ' + limit + '\n' +
-    'Device memory (rounded): ' + dev + '\n' +
-    'CPU cores: ' + cores + '\n\n' +
-    'The model lives in GPU memory, not JS heap.'
+    'JS heap: ' + used + ' / ' + limit + '\n' +
+    'Device memory: ' + dev + '\n' +
+    'CPU cores: ' + cores
   );
 }
-
 async function retrieveContext(question, k){
   k = k || MAX_SOURCES;
   if (fastMode) return [];
@@ -1938,53 +1851,41 @@ async function retrieveContext(question, k){
     return timed || [];
   } catch(e){ return []; }
 }
-
 async function buildMessages(){
   const msgs = [];
   const note = activeNote();
-
   let system =
-    'You are Cortex, a helpful AI assistant built into a local note-taking app. ' +
-    'Answer concisely and helpfully. When you use information from a retrieved note, ' +
-    'mention the note title naturally in your answer.';
-
+    'You are Cortex, a helpful AI assistant in a local note-taking app. ' +
+    'Answer concisely. Mention note titles when using their content.';
   if (note){
     const title = note.title || 'Untitled';
     const body = truncate((note.body || '').trim(), MAX_CURRENT_NOTE_CHARS);
-    system +=
-      '\n\nThe user is currently viewing a note titled "' + title + '". Here is its content:\n\n' +
-      '---\n' + (body || '(empty note)') + '\n---';
+    system += '\n\nCurrent note "' + title + '":\n---\n' + (body || '(empty)') + '\n---';
   }
-
   const lastUser = [...chatHistory].reverse().find(m => m.role === 'user');
   let sources = [];
   if (lastUser && !fastMode){
     const hits = await retrieveContext(lastUser.content, MAX_SOURCES);
     if (hits.length){
       sources = hits.map(h => h.note);
-      system += '\n\nOther relevant notes from the collection:\n\n';
+      system += '\n\nOther relevant notes:\n\n';
       for (const h of hits){
         const t = h.note.title || 'Untitled';
         const b = truncate((h.note.body || ''), MAX_SOURCE_CHARS);
         system += '### ' + t + '\n' + b + '\n\n';
       }
-      system += 'Use these when helpful.';
     }
   }
-
   msgs.push({ role: 'system', content: system });
   for (const m of chatHistory) msgs.push({ role: m.role, content: m.content });
-  return { messages: msgs, sources: sources };
+  return { messages: msgs, sources };
 }
-
 async function sendMessage(text){
   if (generating) return;
   text = (text || '').trim();
   if (!text) return;
-
   if (!llmEngine){
-    chatInput.disabled = true;
-    btnSend.disabled = true;
+    chatInput.disabled = true; btnSend.disabled = true;
     chatHistory.push({ role: 'user', content: text });
     appendMessage('user', text);
     await startEngineLoad();
@@ -1993,29 +1894,17 @@ async function sendMessage(text){
     chatHistory.push({ role: 'user', content: text });
     appendMessage('user', text);
   }
-
   generating = true;
-  btnSend.disabled = true;
-  chatInput.disabled = true;
-  chatInput.value = '';
-  chatInput.style.height = '';
+  btnSend.disabled = true; chatInput.disabled = true;
+  chatInput.value = ''; chatInput.style.height = '';
   setModelState('busy', 'thinking');
-
   const assistantEl = appendMessage('assistant', '…');
-
   try {
     const built = await buildMessages();
     const chunks = await llmEngine.chat.completions.create({
-      messages: built.messages,
-      temperature: 0.7,
-      stream: true,
+      messages: built.messages, temperature: 0.7, stream: true,
     });
-
-    let full = '';
-    let pending = '';
-    let rafScheduled = false;
-    let started = false;
-
+    let full = '', pending = '', rafScheduled = false, started = false;
     function flush(){
       rafScheduled = false;
       if (!pending) return;
@@ -2024,13 +1913,11 @@ async function sendMessage(text){
       pending = '';
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-
     for await (const chunk of chunks){
       const delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta
         ? (chunk.choices[0].delta.content || '') : '';
       if (!delta) continue;
-      full += delta;
-      pending += delta;
+      full += delta; pending += delta;
       if (!rafScheduled){ rafScheduled = true; requestAnimationFrame(flush); }
     }
     flush();
@@ -2048,7 +1935,6 @@ async function sendMessage(text){
     chatInput.focus();
   }
 }
-
 btnSend.addEventListener('click', () => sendMessage(chatInput.value));
 chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(chatInput.value); }
@@ -2057,7 +1943,6 @@ chatInput.addEventListener('input', () => {
   chatInput.style.height = 'auto';
   chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
 });
-
 document.getElementById('btnChat').addEventListener('click', () => {
   if (chatSheet.classList.contains('open')) closeChat(); else openChat();
 });
@@ -2068,182 +1953,33 @@ document.getElementById('quickExplain').addEventListener('click', () => {
   chatInput.value = 'Explain the key ideas in this note in simple terms.'; chatInput.focus();
 });
 document.getElementById('quickQuestions').addEventListener('click', () => {
-  chatInput.value = 'Suggest 5 follow-up questions I should investigate based on this note.'; chatInput.focus();
+  chatInput.value = 'Suggest 5 follow-up questions based on this note.'; chatInput.focus();
 });
 
 /* ============================================================
-   17. Events
+   Sync
    ============================================================ */
 
-editor.addEventListener('input', () => {
-  scheduleSave();
-  renderLinkSuggest();
-  if (view === 'preview') updatePreview();
-});
-titleInput.addEventListener('input', scheduleSave);
-
-searchBox.addEventListener('input', () => {
-  if (searchMode === 'semantic'){
-    renderNoteList();
-    clearTimeout(semanticDebounce);
-    semanticDebounce = setTimeout(runSemanticQuery, 200);
-  } else {
-    renderNoteList();
-  }
-});
-searchBox.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter'){
-    e.preventDefault();
-    if (searchMode === 'semantic'){
-      clearTimeout(semanticDebounce);
-      runSemanticQuery();
-    }
-  }
-});
-searchBox.addEventListener('search', () => {
-  if (searchMode === 'semantic') runSemanticQuery();
-  else renderNoteList();
-});
-btnSearchMode.addEventListener('click', toggleSearchMode);
-
-embedFooter.addEventListener('click', () => {
-  if (embedStatus === 'error'){
-    embedderLoading = null;
-    embedStatus = 'idle';
-    embedSweep().catch(() => {});
-    return;
-  }
-  if (confirm('Re-index all notes? This recomputes embeddings for every note.')){
-    reindexAll();
-  }
-});
-
-document.getElementById('btnNew').addEventListener('click', () => createNote());
-document.getElementById('btnPreview').addEventListener('click', () => {
-  setView(view === 'edit' ? 'preview' : 'edit');
-});
-document.getElementById('btnSidebar').addEventListener('click', () => {
-  if (sidebar.classList.contains('open')) closeSidebar(); else openSidebar();
-});
-scrim.addEventListener('click', closeSidebar);
-
-editor.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape'){
-    if (linkSuggest.style.display !== 'none'){ e.preventDefault(); linkSuggest.style.display = 'none'; return; }
-  }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'l'){
-    e.preventDefault();
-    const pos = editor.selectionStart;
-    replaceFromTo(pos, editor.selectionEnd, '[[');
-    renderLinkSuggest();
-  }
-});
-
-document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'n'){ e.preventDefault(); createNote(); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'e'){ e.preventDefault(); setView(view === 'edit' ? 'preview' : 'edit'); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'k'){
-    e.preventDefault();
-    if (chatSheet.classList.contains('open')) closeChat(); else openChat();
-  }
-  if (e.key === 'Escape'){
-    closeSidebar();
-    if (menuModal.classList.contains('open')) closeMenu();
-    else if (modelModal.classList.contains('open')) closeModelModal();
-    else if (chatSheet.classList.contains('open')) closeChat();
-  }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace'){
-    if (document.activeElement !== editor && document.activeElement !== titleInput){
-      e.preventDefault(); deleteActiveNote();
-    }
-  }
-});
-
-window.addEventListener('beforeunload', () => {
-  const n = activeNote();
-  if (n){ n.title = titleInput.value.trim() || 'Untitled'; n.body = editor.value; n.updated = Date.now(); }
-});
-
-/* ============================================================
-   18. Viewport
-   ============================================================ */
-
-function updateViewport(){
-  const vv = window.visualViewport;
-  if (!vv) return;
-  document.documentElement.style.setProperty('--vvh', vv.height + 'px');
-  document.documentElement.style.setProperty('--vvt', vv.offsetTop + 'px');
+function openSyncModal(){
+  renderSyncLanding();
+  syncModal.classList.add('open');
 }
-if (window.visualViewport){
-  window.visualViewport.addEventListener('resize', updateViewport);
-  window.visualViewport.addEventListener('scroll', () => { updateViewport(); window.scrollTo(0, 0); });
+function closeSyncModal(){
+  syncModal.classList.remove('open');
+  if (window.CortexSync) window.CortexSync.reset();
 }
-window.addEventListener('orientationchange', () => setTimeout(updateViewport, 250));
-updateViewport();
+syncModal.addEventListener('click', (e) => { if (e.target === syncModal) closeSyncModal(); });
 
-/* ============================================================
-   19. Init
-   ============================================================ */
+function renderSyncLanding(){
+  syncCard.textContent = '';
 
-async function init(){
-  try { notes = await dbGetAll(); } catch(e){ notes = []; }
+  const head = document.createElement('div');
+  head.className = 'mHead';
+  head.textContent = 'Sync across devices';
+  syncCard.appendChild(head);
 
-  if (!notes.length){
-    const a = {
-      id: uid(),
-      title: 'Welcome to Cortex',
-      body: '# Welcome to Cortex\n\nThis is a note. It links to another: [[How wiki links work]].\n',
-      created: Date.now(), updated: Date.now(),
-    };
-    const b = {
-      id: uid(),
-      title: 'How wiki links work',
-      body: '# Wiki links\n\nType `[[` to link to another note.\n',
-      created: Date.now(), updated: Date.now(),
-    };
-    notes.push(a, b);
-    try { await dbPut(a); await dbPut(b); } catch(e){}
-  }
-
-  const sorted = [...notes].sort((a, b) => b.updated - a.updated);
-  activeId = sorted[0].id;
-  const n = activeNote();
-  titleInput.value = n.title === 'Untitled' ? '' : (n.title || '');
-  editor.value = n.body || '';
-
-  renderNoteList();
-  renderBacklinks();
-  setView('edit');
-  setModelState('', 'idle');
-  updateFastChip();
-  updateEmbedStatusUI();
-  editor.focus();
-
-  if (notes.some(n => n.body && n.body.trim().length > 20)){
-    setTimeout(async () => {
-      try {
-        await loadEmbedder();
-        await embedSweep();
-      } catch(err){
-        console.warn('[Cortex] Embedder init failed:', err);
-      }
-    }, 1200);
-  }
-}
-
-init();
-
-/* ============================================================
-   20. Service worker
-   ============================================================ */
-
-if ('serviceWorker' in navigator){
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js', { scope: './' })
-      .then(() => console.log('[Cortex] Service worker active. Version:', APP_VERSION))
-      .catch((err) => console.warn('[Cortex] SW registration failed:', err));
-  });
-}
-</script>
-</body>
-</html>
+  const body = document.createElement('div');
+  body.className = 'syncBody';
+  body.innerHTML =
+    '<div class="syncText">' +
+    'Both devices must be on the same Wi
