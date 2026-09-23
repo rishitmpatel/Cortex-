@@ -371,11 +371,46 @@ function noteByTitle(title){
 /* Convert [[Target]] / [[Target|Display]] into standard markdown links
    with a custom scheme, so marked will render them as <a href="wiki://...">. */
 function preprocessWikiLinks(md){
-  return md.replace(WIKI_RE, (_, target, display) => {
-    const t = target.trim();
-    const d = (display || target).trim();
-    return '[' + d + '](wiki://' + encodeURIComponent(t) + ')';
-  });
+  let out = '';
+  let i = 0;
+  while (i < md.length){
+    const c = md[i];
+
+    // Skip over code spans and code fences (backtick-delimited)
+    if (c === '`'){
+      let n = 1;
+      while (md[i + n] === '`') n++;
+      const fence = '`'.repeat(n);
+      const close = md.indexOf(fence, i + n);
+      if (close === -1){
+        out += md.slice(i);
+        break;
+      }
+      out += md.slice(i, close + n);
+      i = close + n;
+      continue;
+    }
+
+    // Wiki link: [[Target]] or [[Target|Display]]
+    if (c === '[' && md[i + 1] === '['){
+      const end = md.indexOf(']]', i + 2);
+      if (end !== -1){
+        const inner = md.slice(i + 2, end);
+        const parts = inner.split('|');
+        const target = parts[0].trim();
+        const display = (parts[1] || parts[0]).trim();
+        if (target){
+          out += '[' + display + '](wiki://' + encodeURIComponent(target) + ')';
+          i = end + 2;
+          continue;
+        }
+      }
+    }
+
+    out += c;
+    i++;
+  }
+  return out;
 }
 
 function styleWikiLinks(){
