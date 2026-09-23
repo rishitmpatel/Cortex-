@@ -1,6 +1,6 @@
 /* Cortex service worker */
 
-const CACHE_NAME = 'cortex-v6';
+const CACHE_NAME = 'cortex-v7';
 
 const APP_SHELL = [
   './',
@@ -10,7 +10,7 @@ const APP_SHELL = [
   './icon-maskable.svg',
 ];
 
-const CDN_HOSTS = ['cdn.jsdelivr.net', 'unpkg.com', 'esm.run'];
+const CDN_HOSTS = ['cdn.jsdelivr.net', 'unpkg.com'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
