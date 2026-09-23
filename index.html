@@ -72,7 +72,10 @@ body{
 .noteItem.active{background:var(--panel2);border-left:3px solid var(--accent);padding-left:9px;}
 .noteTitle{font-size:14px;font-weight:500;color:var(--text);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.noteMeta{font-size:11px;color:var(--muted);margin-top:3px;}
+.noteMeta{font-size:11px;color:var(--muted);margin-top:3px;
+  display:flex;align-items:center;gap:6px;}
+.noteLinkCount{font-size:10px;background:var(--panel2);padding:1px 5px;
+  border-radius:8px;color:var(--muted);}
 .emptyNote{padding:20px 12px;color:var(--muted);font-size:13px;text-align:center;}
 
 /* ---- editor pane ---- */
@@ -119,6 +122,58 @@ body{
 #preview table{border-collapse:collapse;}
 #preview th,#preview td{border:1px solid var(--line);padding:6px 10px;}
 
+/* wiki links in preview */
+#preview a.wikilink{
+  color:var(--accent);
+  text-decoration:none;
+  border-bottom:1px solid var(--accent);
+  padding-bottom:1px;
+  cursor:pointer;
+}
+#preview a.wikilink-missing{
+  color:var(--muted);
+  border-bottom:1px dashed var(--muted);
+}
+#preview a.wikilink:active{background:rgba(167,139,250,.15);}
+
+/* ---- link autocomplete bar ---- */
+#linkSuggest{
+  flex:0 0 auto;display:none;gap:6px;padding:8px 8px;
+  background:var(--panel2);border-top:1px solid var(--line);
+  overflow-x:auto;overflow-y:hidden;white-space:nowrap;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;
+}
+#linkSuggest::-webkit-scrollbar{display:none;}
+.linkChip{
+  flex:0 0 auto;padding:7px 12px;border-radius:6px;
+  background:var(--panel);border:1px solid var(--line);color:var(--text);
+  font-size:13px;cursor:pointer;user-select:none;-webkit-user-select:none;
+}
+.linkChip:active{background:var(--btn);color:#fff;border-color:var(--btn);}
+.linkChip.new{color:var(--accent);border-style:dashed;}
+
+/* ---- backlinks bar ---- */
+#backlinksBar{
+  flex:0 0 auto;display:none;gap:6px;padding:8px 10px;
+  padding-bottom:calc(8px + env(safe-area-inset-bottom));
+  background:var(--panel);border-top:1px solid var(--line);
+  overflow-x:auto;overflow-y:hidden;white-space:nowrap;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  align-items:center;
+}
+#backlinksBar::-webkit-scrollbar{display:none;}
+#backlinksLabel{
+  flex:0 0 auto;font-size:11px;color:var(--muted);font-weight:600;
+  letter-spacing:.5px;text-transform:uppercase;padding-right:4px;
+}
+.backlinkChip{
+  flex:0 0 auto;padding:6px 10px;border-radius:14px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--md-link);
+  font-size:12px;cursor:pointer;user-select:none;-webkit-user-select:none;
+  max-width:180px;overflow:hidden;text-overflow:ellipsis;
+}
+.backlinkChip:active{background:var(--btn);color:#fff;border-color:var(--btn);}
+
 /* ---- scrim for mobile sidebar ---- */
 #scrim{position:absolute;inset:0;background:rgba(0,0,0,.5);
   opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;}
@@ -156,9 +211,11 @@ body{
       <input id="titleInput" type="text" placeholder="Untitled" autocomplete="off">
       <div id="editorArea">
         <textarea id="editor" spellcheck="false" autocapitalize="sentences"
-          placeholder="Start writing... Markdown supported."></textarea>
+          placeholder="Start writing... Markdown and [[wiki links]] supported."></textarea>
         <div id="preview"></div>
       </div>
+      <div id="linkSuggest"></div>
+      <div id="backlinksBar"></div>
     </section>
     <div id="scrim"></div>
   </div>
@@ -229,21 +286,23 @@ async function dbDelete(id){
    2. STATE
    ============================================================ */
 
-let notes = [];          // array of { id, title, body, created, updated }
+let notes = [];
 let activeId = null;
-let view = 'edit';       // 'edit' or 'preview'
+let view = 'edit';
 
 /* ============================================================
    3. DOM
    ============================================================ */
 
-const editor       = document.getElementById('editor');
-const preview      = document.getElementById('preview');
-const titleInput   = document.getElementById('titleInput');
-const noteList     = document.getElementById('noteList');
-const searchBox    = document.getElementById('searchBox');
-const sidebar      = document.getElementById('sidebar');
-const scrim        = document.getElementById('scrim');
+const editor      = document.getElementById('editor');
+const preview     = document.getElementById('preview');
+const titleInput  = document.getElementById('titleInput');
+const noteList    = document.getElementById('noteList');
+const searchBox   = document.getElementById('searchBox');
+const sidebar     = document.getElementById('sidebar');
+const scrim       = document.getElementById('scrim');
+const linkSuggest = document.getElementById('linkSuggest');
+const backlinksBar= document.getElementById('backlinksBar');
 
 /* ============================================================
    4. HELPERS
@@ -267,11 +326,15 @@ function activeNote(){
   return notes.find(n => n.id === activeId) || null;
 }
 
-/* Minimal sanitizer — removes the dangerous bits of rendered markdown.
-   For a public release this should be DOMPurify, but for personal use
-   this catches the realistic attack vectors. */
+function escapeHTML(s){
+  return String(s).replace(/[&<>"']/g, c =>
+    c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' :
+    c === '"' ? '&quot;' : '&#39;');
+}
+
+/* Minimal sanitizer — removes dangerous HTML from markdown output. */
 function sanitizeHTML(html){
-  html = html.replace(/<\s*\/?\s*(script|style|iframe|object|embed|link|meta)\b[^>]*>/gi, '');
+  html = html.replace(/<\s*\/?\s*(script|style|iframe|object|embed|link|meta|base)\b[^>]*>/gi, '');
   html = html.replace(/\son\w+\s*=\s*"[^"]*"/gi, '');
   html = html.replace(/\son\w+\s*=\s*'[^']*'/gi, '');
   html = html.replace(/\son\w+\s*=\s*[^\s>]+/gi, '');
@@ -281,7 +344,52 @@ function sanitizeHTML(html){
 }
 
 /* ============================================================
-   5. SIDEBAR / NOTE LIST
+   5. WIKI LINK PARSING
+   ============================================================ */
+
+const WIKI_RE = /\[\[([^\[\]|]+?)(?:\|([^\[\]]+?))?\]\]/g;
+
+function extractWikiLinks(body){
+  const out = [];
+  if (!body) return out;
+  WIKI_RE.lastIndex = 0;
+  let m;
+  while ((m = WIKI_RE.exec(body)) !== null){
+    const target = m[1].trim();
+    const display = (m[2] || m[1]).trim();
+    if (target) out.push({ target, display });
+  }
+  return out;
+}
+
+function noteByTitle(title){
+  if (!title) return null;
+  const t = title.toLowerCase();
+  return notes.find(n => (n.title || '').toLowerCase() === t) || null;
+}
+
+/* Convert [[Target]] / [[Target|Display]] into standard markdown links
+   with a custom scheme, so marked will render them as <a href="wiki://...">. */
+function preprocessWikiLinks(md){
+  return md.replace(WIKI_RE, (_, target, display) => {
+    const t = target.trim();
+    const d = (display || target).trim();
+    return '[' + d + '](wiki://' + encodeURIComponent(t) + ')';
+  });
+}
+
+function styleWikiLinks(){
+  const anchors = preview.querySelectorAll('a[href^="wiki://"]');
+  for (const a of anchors){
+    const target = decodeURIComponent(a.getAttribute('href').slice(7));
+    a.classList.add('wikilink');
+    if (!noteByTitle(target)) a.classList.add('wikilink-missing');
+    a.setAttribute('data-wiki-target', target);
+  }
+}
+
+/* ============================================================
+   6. SIDEBAR / NOTE LIST
    ============================================================ */
 
 function renderNoteList(){
@@ -305,7 +413,18 @@ function renderNoteList(){
 
     const meta = document.createElement('div');
     meta.className = 'noteMeta';
-    meta.textContent = formatTime(n.updated);
+    const time = document.createElement('span');
+    time.textContent = formatTime(n.updated);
+    meta.appendChild(time);
+
+    // Backlink count badge
+    const bl = findBacklinks(n.id);
+    if (bl.length){
+      const badge = document.createElement('span');
+      badge.className = 'noteLinkCount';
+      badge.textContent = '← ' + bl.length;
+      meta.appendChild(badge);
+    }
 
     item.appendChild(title);
     item.appendChild(meta);
@@ -332,7 +451,50 @@ function closeSidebar(){
 }
 
 /* ============================================================
-   6. NOTE CRUD
+   7. BACKLINKS
+   ============================================================ */
+
+function findBacklinks(noteId){
+  const note = notes.find(n => n.id === noteId);
+  if (!note) return [];
+  const title = (note.title || '').toLowerCase();
+  if (!title || title === 'untitled') return [];
+
+  const out = [];
+  for (const other of notes){
+    if (other.id === noteId) continue;
+    const links = extractWikiLinks(other.body || '');
+    if (links.some(l => l.target.toLowerCase() === title)) out.push(other);
+  }
+  // Most recent first
+  return out.sort((a, b) => b.updated - a.updated);
+}
+
+function renderBacklinks(){
+  const n = activeNote();
+  if (!n){ backlinksBar.style.display = 'none'; return; }
+  const bl = findBacklinks(n.id);
+  if (!bl.length){ backlinksBar.style.display = 'none'; return; }
+
+  backlinksBar.textContent = '';
+
+  const label = document.createElement('span');
+  label.id = 'backlinksLabel';
+  label.textContent = 'Linked from';
+  backlinksBar.appendChild(label);
+
+  for (const other of bl){
+    const chip = document.createElement('div');
+    chip.className = 'backlinkChip';
+    chip.textContent = other.title || 'Untitled';
+    chip.addEventListener('click', () => switchNote(other.id));
+    backlinksBar.appendChild(chip);
+  }
+  backlinksBar.style.display = 'flex';
+}
+
+/* ============================================================
+   8. NOTE CRUD
    ============================================================ */
 
 async function saveNote(){
@@ -354,11 +516,13 @@ function scheduleSave(){
   saveTimer = setTimeout(async () => {
     await saveNote();
     renderNoteList();
+    renderBacklinks();
+    if (view === 'preview') updatePreview();
   }, 400);
 }
 
 async function switchNote(id){
-  if (id === activeId) { closeSidebar(); return; }
+  if (id === activeId){ closeSidebar(); return; }
   await saveNote();
   activeId = id;
   const n = activeNote();
@@ -366,27 +530,33 @@ async function switchNote(id){
   titleInput.value = n.title === 'Untitled' ? '' : (n.title || '');
   editor.value = n.body || '';
   editor.scrollTop = 0;
+  linkSuggest.style.display = 'none';
   renderNoteList();
+  renderBacklinks();
   if (view === 'preview') updatePreview();
   if (window.innerWidth <= 700) closeSidebar();
 }
 
-async function createNote(){
+async function createNote(initialTitle, initialBody){
   await saveNote();
   const n = {
     id: uid(),
-    title: 'Untitled',
-    body: '',
+    title: initialTitle || 'Untitled',
+    body: initialBody || '',
     created: Date.now(),
     updated: Date.now(),
   };
   notes.push(n);
+  try { await dbPut(n); } catch(e){}
   activeId = n.id;
-  titleInput.value = '';
-  editor.value = '';
+  titleInput.value = n.title === 'Untitled' ? '' : n.title;
+  editor.value = n.body;
   renderNoteList();
+  renderBacklinks();
   if (view === 'preview') updatePreview();
-  titleInput.focus();
+  if (!initialTitle) titleInput.focus();
+  else editor.focus();
+  return n;
 }
 
 async function deleteActiveNote(){
@@ -400,35 +570,131 @@ async function deleteActiveNote(){
 
   if (!notes.length){
     await createNote();
-  } else {
-    const next = [...notes].sort((a, b) => b.updated - a.updated)[0];
-    activeId = next.id;
-    titleInput.value = next.title === 'Untitled' ? '' : (next.title || '');
-    editor.value = next.body || '';
-    editor.scrollTop = 0;
+    return;
   }
+  const next = [...notes].sort((a, b) => b.updated - a.updated)[0];
+  activeId = next.id;
+  titleInput.value = next.title === 'Untitled' ? '' : (next.title || '');
+  editor.value = next.body || '';
+  editor.scrollTop = 0;
   renderNoteList();
+  renderBacklinks();
   if (view === 'preview') updatePreview();
 }
 
 /* ============================================================
-   7. PREVIEW
+   9. WIKI LINK NAVIGATION
    ============================================================ */
+
+async function navigateToWikiLink(target){
+  const existing = noteByTitle(target);
+  if (existing){
+    await switchNote(existing.id);
+    return;
+  }
+  // Create it
+  const n = await createNote(target, '');
+  // Keep view as-is; if preview, switch back to edit so they can write
+  if (view === 'preview') setView('edit');
+  editor.focus();
+}
+
+/* ============================================================
+   10. LINK AUTOCOMPLETE
+   ============================================================ */
+
+/* Detect a `[[` typed before the caret with no closing `]]` */
+function checkLinkAutocomplete(){
+  const pos = editor.selectionStart;
+  if (pos !== editor.selectionEnd) return null;
+  const before = editor.value.slice(0, pos);
+  const m = before.match(/\[\[([^\[\]]*)$/);
+  if (!m) return null;
+  return { query: m[1], start: pos - m[0].length };
+}
+
+function renderLinkSuggest(){
+  const ctx = checkLinkAutocomplete();
+  if (!ctx){ linkSuggest.style.display = 'none'; return; }
+
+  const q = ctx.query.trim().toLowerCase();
+
+  let matches = notes
+    .filter(n => n.id !== activeId)
+    .filter(n => {
+      const t = (n.title || 'Untitled').toLowerCase();
+      return q ? t.includes(q) : true;
+    })
+    .sort((a, b) => {
+      const at = (a.title || '').toLowerCase();
+      const bt = (b.title || '').toLowerCase();
+      const aStarts = at.startsWith(q) ? 0 : 1;
+      const bStarts = bt.startsWith(q) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return b.updated - a.updated;
+    })
+    .slice(0, 10);
+
+  linkSuggest.textContent = '';
+
+  for (const n of matches){
+    const title = n.title || 'Untitled';
+    const chip = document.createElement('div');
+    chip.className = 'linkChip';
+    chip.textContent = title;
+    chip.addEventListener('click', () => insertLinkSuggestion(ctx, title));
+    linkSuggest.appendChild(chip);
+  }
+
+  // Offer to create a new note if nothing matches exactly
+  const trimmed = ctx.query.trim();
+  if (trimmed && !matches.some(n => (n.title || '').toLowerCase() === q)){
+    const chip = document.createElement('div');
+    chip.className = 'linkChip new';
+    chip.textContent = '+ Create "' + trimmed + '"';
+    chip.addEventListener('click', () => insertLinkSuggestion(ctx, trimmed));
+    linkSuggest.appendChild(chip);
+  }
+
+  linkSuggest.style.display = (matches.length || trimmed) ? 'flex' : 'none';
+}
+
+function replaceFromTo(start, end, text){
+  const v = editor.value;
+  editor.value = v.slice(0, start) + text + v.slice(end);
+  const newPos = start + text.length;
+  try { editor.setSelectionRange(newPos, newPos); } catch(e){}
+  editor.focus();
+  scheduleSave();
+}
+
+function insertLinkSuggestion(ctx, title){
+  const insert = '[[' + title + ']]';
+  replaceFromTo(ctx.start, editor.selectionStart, insert);
+  linkSuggest.style.display = 'none';
+}
+
+/* ============================================================
+   11. PREVIEW
+   ============================================================ */
+
+if (window.marked && window.marked.use){
+  window.marked.use({ breaks: true, gfm: true });
+}
 
 function updatePreview(){
   if (view !== 'preview') return;
-  const md = editor.value;
+  const md = preprocessWikiLinks(editor.value);
   let html;
-  if (window.marked && typeof window.marked.parse === 'function'){
-    try {
-      html = window.marked.parse(md, { breaks: true, gfm: true });
-    } catch(e){
-      html = '<pre>' + md.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</pre>';
-    }
-  } else {
-    html = '<pre>' + md.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</pre>';
+  try {
+    html = window.marked && window.marked.parse
+      ? window.marked.parse(md)
+      : '<pre>' + escapeHTML(editor.value) + '</pre>';
+  } catch(e){
+    html = '<pre>' + escapeHTML(editor.value) + '</pre>';
   }
   preview.innerHTML = sanitizeHTML(html);
+  styleWikiLinks();
 }
 
 function setView(v){
@@ -439,6 +705,7 @@ function setView(v){
     preview.style.display = 'block';
     btn.textContent = 'Edit';
     updatePreview();
+    linkSuggest.style.display = 'none';
   } else {
     editor.style.display = '';
     preview.style.display = 'none';
@@ -447,24 +714,30 @@ function setView(v){
   }
 }
 
+/* Click handling for wiki links inside preview */
+preview.addEventListener('click', (e) => {
+  const a = e.target.closest('a[data-wiki-target]');
+  if (!a) return;
+  e.preventDefault();
+  const target = a.getAttribute('data-wiki-target');
+  if (target) navigateToWikiLink(target);
+});
+
 /* ============================================================
-   8. EVENTS
+   12. EVENTS
    ============================================================ */
 
 editor.addEventListener('input', () => {
   scheduleSave();
+  renderLinkSuggest();
   if (view === 'preview') updatePreview();
 });
-editor.addEventListener('scroll', () => {
-  // noop — reserved for future line-number sync
-}, { passive:true });
 
 titleInput.addEventListener('input', scheduleSave);
-
 searchBox.addEventListener('input', renderNoteList);
 searchBox.addEventListener('search', renderNoteList);
 
-document.getElementById('btnNew').addEventListener('click', createNote);
+document.getElementById('btnNew').addEventListener('click', () => createNote());
 document.getElementById('btnPreview').addEventListener('click', () => {
   setView(view === 'edit' ? 'preview' : 'edit');
 });
@@ -474,6 +747,25 @@ document.getElementById('btnSidebar').addEventListener('click', () => {
 });
 scrim.addEventListener('click', closeSidebar);
 
+/* Escape closes suggestions first, then sidebar */
+editor.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape'){
+    if (linkSuggest.style.display !== 'none'){
+      e.preventDefault();
+      linkSuggest.style.display = 'none';
+      return;
+    }
+  }
+  // Ctrl/Cmd+Enter as a shortcut to insert a wiki link bracket
+  // (nice-to-have on tablets)
+  if ((e.ctrlKey || e.metaKey) && e.key === 'l'){
+    e.preventDefault();
+    const pos = editor.selectionStart;
+    replaceFromTo(pos, editor.selectionEnd, '[[');
+    renderLinkSuggest();
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'n'){
     e.preventDefault(); createNote();
@@ -482,12 +774,8 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     setView(view === 'edit' ? 'preview' : 'edit');
   }
-  if (e.key === 'Escape'){
-    closeSidebar();
-  }
-  // Delete active note: Ctrl/Cmd + Backspace
+  if (e.key === 'Escape') closeSidebar();
   if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace'){
-    // only if not focused in editor (so we don't clash with text deletion)
     if (document.activeElement !== editor && document.activeElement !== titleInput){
       e.preventDefault(); deleteActiveNote();
     }
@@ -500,14 +788,11 @@ window.addEventListener('beforeunload', () => {
     n.title = titleInput.value.trim() || 'Untitled';
     n.body = editor.value;
     n.updated = Date.now();
-    // IndexedDB is async — a best-effort synchronous flush isn't possible,
-    // so we just update the in-memory object. The autosave has already
-    // persisted the last change 400ms after the last keystroke.
   }
 });
 
 /* ============================================================
-   9. VIEWPORT (mobile keyboard)
+   13. VIEWPORT
    ============================================================ */
 
 function updateViewport(){
@@ -526,7 +811,7 @@ window.addEventListener('orientationchange', () => setTimeout(updateViewport, 25
 updateViewport();
 
 /* ============================================================
-   10. INIT
+   14. INIT
    ============================================================ */
 
 async function init(){
@@ -537,26 +822,40 @@ async function init(){
   }
 
   if (!notes.length){
-    const welcome = {
+    const a = {
       id: uid(),
       title: 'Welcome to Cortex',
       body:
         '# Welcome to Cortex\n\n' +
-        'This is your first note. Edit it, or tap **+ New** to create another.\n\n' +
-        '## What works in this version\n\n' +
-        '- Multiple notes, auto-saved\n' +
-        '- Markdown preview (tap **Preview** or press Ctrl+E)\n' +
-        '- Search across all notes\n' +
-        '- Works offline after the first load\n' +
-        '- Installable as an app on your tablet\n\n' +
-        '## What is coming next\n\n' +
-        'Wiki links, backlinks, semantic search, and a local AI that reads your notes.\n\n' +
-        '> Everything stays on your device. Nothing is sent to a server.\n',
+        'This is a note. It links to another note: [[How wiki links work]].\n\n' +
+        'Tap **Preview** (or press Ctrl+E) to see the link render.\n\n' +
+        '## Multiple notes, one graph\n\n' +
+        'Every note can link to any other. Backlinks appear at the bottom ' +
+        'of the note they point to. Try it: create a new note and link it ' +
+        'from this one with `[[Its Title]]`.\n',
       created: Date.now(),
       updated: Date.now(),
     };
-    notes.push(welcome);
-    try { await dbPut(welcome); } catch(e){}
+    const b = {
+      id: uid(),
+      title: 'How wiki links work',
+      body:
+        '## Wiki links\n\n' +
+        'Type `[[` in the editor and a suggestion bar appears. Keep typing ' +
+        'to filter, or tap a title to insert it.\n\n' +
+        'Formats supported:\n\n' +
+        '- `[[Some Note]]` — links to "Some Note", displays as "Some Note"\n' +
+        '- `[[Some Note|display text]]` — links to "Some Note", displays as "display text"\n' +
+        '- Matching is case-insensitive\n' +
+        '- If the target note doesn\'t exist, clicking the link creates it\n\n' +
+        '## Backlinks\n\n' +
+        'Open "Welcome to Cortex" and you\'ll see a strip at the bottom ' +
+        'saying "Linked from" with a chip pointing back here.\n',
+      created: Date.now(),
+      updated: Date.now(),
+    };
+    notes.push(a, b);
+    try { await dbPut(a); await dbPut(b); } catch(e){}
   }
 
   const sorted = [...notes].sort((a, b) => b.updated - a.updated);
@@ -566,6 +865,7 @@ async function init(){
   editor.value = n.body || '';
 
   renderNoteList();
+  renderBacklinks();
   setView('edit');
   editor.focus();
 }
@@ -573,7 +873,7 @@ async function init(){
 init();
 
 /* ============================================================
-   11. SERVICE WORKER
+   15. SERVICE WORKER
    ============================================================ */
 
 if ('serviceWorker' in navigator){
