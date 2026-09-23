@@ -855,11 +855,14 @@ async function startEngineLoad(){
       const webllm = await import('https://esm.run/@mlc-ai/web-llm');
 
       const engine = await webllm.CreateMLCEngine(MODEL_ID, {
-        initProgressCallback: (report) => {
-          const text = report && report.text ? report.text : 'Loading...';
-          showChatProgress(text, report && report.progress);
-        },
-      });
+  appConfig: {
+    useIndexedDBCache: true,
+  },
+  initProgressCallback: (report) => {
+    const text = report && report.text ? report.text : 'Loading...';
+    showChatProgress(text, report && report.progress);
+  },
+});
 
       llmEngine = engine;
       hideChatProgress();
