@@ -1,10 +1,12 @@
-/* Cortex Sync — WebRTC peer-to-peer note sync.
+/* Cortex Sync v18 — Local QR pairing via compressed SDP.
 
-   Two transports:
-     1. PeerJS — short 8-char codes, persistent device IDs, auto-reconnect
-     2. Manual — SDP copy-paste, works without third-party signaling
+   Primary transport: WebRTC over LAN with QR-encoded SDP.
+     - SDP is gzip-compressed then base64url-encoded for QR
+     - No signaling server, no PeerJS, no external dependency
+     - STUN included as fallback but LAN candidates suffice
 
-   Merge policy: last-write-wins per note by `updated` timestamp. */
+   Secondary: PeerJS (for devices not on the same Wi-Fi)
+   Fallback:  manual SDP codes (deep advanced) */
 
 (function(global){
   'use strict';
@@ -17,20 +19,23 @@
   const CHUNK_SIZE = 8000;
   const RECV_TIMEOUT_MS = 60000;
   const ICE_WAIT_MS = 3500;
-  const CONNECT_TIMEOUT_MS = 15000;
+  const CONNECT_TIMEOUT_MS = 30000;
 
   const PEERJS_CDN = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+  const QRCODE_CDN = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';
+  const JSQR_CDN   = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+
   const PEER_PREFIX = 'cortexsync-';
-  const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // no 0/O/1/l/I
+  const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const CODE_LENGTH = 8;
 
   const STORE_DEVICE_CODE = 'cortex.device.code.v1';
-  const STORE_PAIRED_PEER = 'cortex.paired.peer.v1';   // JSON: { code, name, lastSync }
-  const STORE_AUTO_SYNC = 'cortex.autosync.v1';        // '1' or '0'
+  const STORE_PAIRED_PEER = 'cortex.paired.peer.v1';
+  const STORE_AUTO_SYNC = 'cortex.autosync.v1';
 
   // ---- state ----
-  let channel = null;          // active Channel (transport-agnostic)
-  let role = null;             // 'host' | 'guest'
+  let channel = null;
+  let role = null;
   let state = 'idle';
 
   let onProgress = null;
@@ -39,13 +44,34 @@
   let notesProvider = null;
   let notesReceiver = null;
 
-  let pjsPeer = null;          // PeerJS Peer instance
-  let pjsConn = null;          // PeerJS DataConnection
+  let pjsPeer = null;
+  let pjsConn = null;
   let peerjsLoaded = false;
   let peerjsLoading = null;
 
+  let qrGenLoaded = false;
+  let qrGenLoading = null;
+  let qrScanLoaded = false;
+  let qrScanLoading = null;
+
+  let activeScanStop = null;
+  let manualPC = null;
+  let localPC = null;   // PC used by the local QR flow
+
+  // ---- logging ----
+  const logLines = [];
+  function log(msg){
+    const t = new Date().toLocaleTimeString('en-GB', { hour12: false });
+    const line = '[' + t + '] ' + msg;
+    logLines.push(line);
+    if (logLines.length > 40) logLines.shift();
+    try { console.log('[CortexSync]', msg); } catch(e){}
+    onProgress && onProgress({ state: 'log', message: line, log: logLines.slice() });
+  }
+  function clearLog(){ logLines.length = 0; }
+
   /* ============================================================
-     Device code (persistent)
+     Device code
      ============================================================ */
 
   function generateCode(){
@@ -79,7 +105,7 @@
   }
 
   /* ============================================================
-     Paired peer memory
+     Paired peer
      ============================================================ */
 
   function getPairedPeer(){
@@ -87,18 +113,16 @@
       const raw = localStorage.getItem(STORE_PAIRED_PEER);
       if (!raw) return null;
       const p = JSON.parse(raw);
-      if (p && typeof p.code === 'string' && p.code.length === CODE_LENGTH) return p;
+      if (p && typeof p.code === 'string') return p;
     } catch(e){}
     return null;
   }
 
   function savePairedPeer(code, name){
-    const norm = normalizeCode(code);
-    if (!norm || norm.length !== CODE_LENGTH) return;
     const existing = getPairedPeer() || {};
     try {
       localStorage.setItem(STORE_PAIRED_PEER, JSON.stringify({
-        code: norm,
+        code: code || existing.code || '',
         name: name || existing.name || '',
         lastSync: Date.now(),
       }));
@@ -117,81 +141,241 @@
   }
 
   /* ============================================================
-     PeerJS loader
+     Library loaders
      ============================================================ */
+
+  function loadScript(src){
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('Failed to load ' + src));
+      document.head.appendChild(s);
+    });
+  }
 
   function loadPeerJS(){
     if (peerjsLoaded && typeof global.Peer === 'function') return Promise.resolve();
     if (peerjsLoading) return peerjsLoading;
-
-    peerjsLoading = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = PEERJS_CDN;
-      s.onload = () => {
-        if (typeof global.Peer === 'function'){
-          peerjsLoaded = true;
-          resolve();
-        } else {
-          peerjsLoading = null;
-          reject(new Error('PeerJS loaded but window.Peer is missing.'));
-        }
-      };
-      s.onerror = () => {
-        peerjsLoading = null;
-        reject(new Error('Could not load PeerJS from unpkg.com. Check your connection.'));
-      };
-      document.head.appendChild(s);
+    log('Loading PeerJS...');
+    peerjsLoading = loadScript(PEERJS_CDN).then(() => {
+      if (typeof global.Peer === 'function'){ peerjsLoaded = true; log('PeerJS ready'); return; }
+      peerjsLoading = null;
+      throw new Error('PeerJS loaded but window.Peer is missing.');
     });
     return peerjsLoading;
   }
 
+  function loadQRGen(){
+    if (qrGenLoaded && global.QRCode && typeof global.QRCode.toDataURL === 'function') return Promise.resolve();
+    if (qrGenLoading) return qrGenLoading;
+    qrGenLoading = loadScript(QRCODE_CDN).then(() => {
+      if (global.QRCode && typeof global.QRCode.toDataURL === 'function'){ qrGenLoaded = true; return; }
+      qrGenLoading = null;
+      throw new Error('QRCode library loaded but API missing.');
+    });
+    return qrGenLoading;
+  }
+
+  function loadQRScan(){
+    if (qrScanLoaded && typeof global.jsQR === 'function') return Promise.resolve();
+    if (qrScanLoading) return qrScanLoading;
+    qrScanLoading = loadScript(JSQR_CDN).then(() => {
+      if (typeof global.jsQR === 'function'){ qrScanLoaded = true; return; }
+      qrScanLoading = null;
+      throw new Error('jsQR loaded but function is missing.');
+    });
+    return qrScanLoading;
+  }
+
   /* ============================================================
-     Channel — transport-agnostic send/receive
+     Compression (gzip via CompressionStream)
+     ============================================================ */
+
+  const hasCompression = (typeof CompressionStream === 'function') && (typeof DecompressionStream === 'function');
+
+  async function compressString(str){
+    if (!hasCompression) return str;   // pass-through
+    const bytes = new TextEncoder().encode(str);
+    const cs = new CompressionStream('gzip');
+    const writer = cs.writable.getWriter();
+    writer.write(bytes);
+    writer.close();
+    const buf = await new Response(cs.readable).arrayBuffer();
+    return new Uint8Array(buf);
+  }
+
+  async function decompressBytes(bytes){
+    if (!hasCompression) return new TextDecoder().decode(bytes);
+    const ds = new DecompressionStream('gzip');
+    const writer = ds.writable.getWriter();
+    writer.write(bytes);
+    writer.close();
+    const buf = await new Response(ds.readable).arrayBuffer();
+    return new TextDecoder().decode(buf);
+  }
+
+  function bytesToBase64Url(bytes){
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function base64UrlToBytes(b64){
+    let s = String(b64 || '').replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    const bin = atob(s);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  async function encodeSDPForQR(sdp, tag){
+    const payload = tag + ':' + sdp;
+    const bytes = await compressString(payload);
+    const b64 = bytesToBase64Url(bytes);
+    return 'cortex://sdp?' + b64;
+  }
+
+  async function decodeSDPFromQR(text){
+    const s = String(text || '');
+    const m = s.match(/cortex:\/\/sdp\?([A-Za-z0-9\-_]+)/);
+    if (!m) return null;
+    try {
+      const bytes = base64UrlToBytes(m[1]);
+      const payload = await decompressBytes(bytes);
+      const idx = payload.indexOf(':');
+      if (idx < 0) return null;
+      const tag = payload.slice(0, idx);
+      const sdp = payload.slice(idx + 1);
+      if (!sdp.startsWith('v=')) return null;
+      return { tag, sdp };
+    } catch(e){
+      return null;
+    }
+  }
+
+  /* ============================================================
+     QR rendering + scanning
+     ============================================================ */
+
+  async function drawQR(text, imgEl, options){
+    await loadQRGen();
+    const opts = Object.assign({
+      errorCorrectionLevel: 'L',      // Low = max data capacity
+      width: 480, margin: 1,
+      color: { dark: '#000000', light: '#ffffff' },
+    }, options || {});
+    return new Promise((resolve, reject) => {
+      global.QRCode.toDataURL(text, opts, (err, url) => {
+        if (err) return reject(err);
+        if (imgEl){ imgEl.src = url; imgEl.alt = 'Pairing QR'; }
+        resolve(url);
+      });
+    });
+  }
+
+  async function startScan(videoEl, onDetected, onError){
+    stopScan();
+    try { await loadQRScan(); }
+    catch(err){ onError && onError(err); return null; }
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+    } catch(err){ onError && onError(err); return null; }
+
+    videoEl.srcObject = stream;
+    videoEl.setAttribute('playsinline', '');
+    videoEl.setAttribute('autoplay', '');
+    videoEl.setAttribute('muted', '');
+    try { await videoEl.play(); } catch(e){}
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    let running = true;
+
+    function tick(){
+      if (!running) return;
+      if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA){
+        const w = videoEl.videoWidth || 640;
+        const h = videoEl.videoHeight || 480;
+        const targetW = Math.min(720, w);
+        const targetH = Math.round(h * (targetW / w));
+        canvas.width = targetW;
+        canvas.height = targetH;
+        try {
+          ctx.drawImage(videoEl, 0, 0, targetW, targetH);
+          const imageData = ctx.getImageData(0, 0, targetW, targetH);
+          const result = global.jsQR(imageData.data, targetW, targetH, {
+            inversionAttempts: 'attemptBoth',
+          });
+          if (result && result.data){
+            running = false;
+            stop();
+            onDetected(result.data);
+            return;
+          }
+        } catch(e){}
+      }
+      requestAnimationFrame(tick);
+    }
+
+    function stop(){
+      running = false;
+      try { stream.getTracks().forEach(t => t.stop()); } catch(e){}
+      try { videoEl.srcObject = null; } catch(e){}
+      if (activeScanStop === stop) activeScanStop = null;
+    }
+
+    activeScanStop = stop;
+    requestAnimationFrame(tick);
+    return stop;
+  }
+
+  function stopScan(){
+    if (activeScanStop){
+      try { activeScanStop(); } catch(e){}
+      activeScanStop = null;
+    }
+  }
+
+  /* ============================================================
+     Channels
      ============================================================ */
 
   function makeRTCChannel(dc){
-    const queue = [];
-    const waiters = [];
-    const chunks = new Map();
+    const queue = []; const waiters = []; const chunks = new Map();
     let closed = false;
 
     function dispatch(msg){
       for (let i = 0; i < waiters.length; i++){
         if (waiters[i].type === msg.type){
           const w = waiters.splice(i, 1)[0];
-          w.resolve(msg);
-          return;
+          w.resolve(msg); return;
         }
       }
       queue.push(msg);
     }
-
     function receive(type){
       return new Promise((resolve, reject) => {
         for (let i = 0; i < queue.length; i++){
-          if (queue[i].type === type){
-            resolve(queue.splice(i, 1)[0]);
-            return;
-          }
+          if (queue[i].type === type){ resolve(queue.splice(i, 1)[0]); return; }
         }
         const w = { type, resolve, reject };
         waiters.push(w);
         setTimeout(() => {
           const i = waiters.indexOf(w);
-          if (i >= 0){
-            waiters.splice(i, 1);
-            reject(new Error('Timeout waiting for "' + type + '"'));
-          }
+          if (i >= 0){ waiters.splice(i, 1); reject(new Error('Timeout waiting for "' + type + '"')); }
         }, RECV_TIMEOUT_MS);
       });
     }
-
     function send(obj){
       const json = JSON.stringify(obj);
-      if (json.length <= CHUNK_SIZE){
-        dc.send('M' + json);
-        return;
-      }
+      if (json.length <= CHUNK_SIZE){ dc.send('M' + json); return; }
       const id = Math.random().toString(36).slice(2, 10);
       const total = Math.ceil(json.length / CHUNK_SIZE);
       for (let i = 0; i < total; i++){
@@ -199,7 +383,6 @@
         dc.send('C' + id + ':' + i + ':' + total + ':' + part);
       }
     }
-
     dc.addEventListener('message', (e) => {
       const data = e.data;
       if (typeof data !== 'string') return;
@@ -207,9 +390,7 @@
         try { dispatch(JSON.parse(data.slice(1))); } catch(err){}
       } else if (data[0] === 'C'){
         const rest = data.slice(1);
-        const c1 = rest.indexOf(':');
-        const c2 = rest.indexOf(':', c1 + 1);
-        const c3 = rest.indexOf(':', c2 + 1);
+        const c1 = rest.indexOf(':'); const c2 = rest.indexOf(':', c1 + 1); const c3 = rest.indexOf(':', c2 + 1);
         if (c1 < 0 || c2 < 0 || c3 < 0) return;
         const id = rest.slice(0, c1);
         const idx = parseInt(rest.slice(c1 + 1, c2), 10);
@@ -219,71 +400,48 @@
         if (!entry){ entry = { total, parts: new Array(total) }; chunks.set(id, entry); }
         entry.parts[idx] = part;
         let complete = true;
-        for (let i = 0; i < entry.total; i++){
-          if (entry.parts[i] === undefined){ complete = false; break; }
-        }
-        if (complete){
-          chunks.delete(id);
-          try { dispatch(JSON.parse(entry.parts.join(''))); } catch(err){}
-        }
+        for (let i = 0; i < entry.total; i++){ if (entry.parts[i] === undefined){ complete = false; break; } }
+        if (complete){ chunks.delete(id); try { dispatch(JSON.parse(entry.parts.join(''))); } catch(err){} }
       }
     });
-
     dc.addEventListener('close', () => { closed = true; });
-
     return {
-      send,
-      receive,
+      send, receive,
       close: () => { try { dc.close(); } catch(e){} closed = true; },
       isClosed: () => closed,
     };
   }
 
   function makePeerJSChannel(conn){
-    const queue = [];
-    const waiters = [];
+    const queue = []; const waiters = [];
     let closed = false;
-
     function dispatch(msg){
       for (let i = 0; i < waiters.length; i++){
         if (waiters[i].type === msg.type){
           const w = waiters.splice(i, 1)[0];
-          w.resolve(msg);
-          return;
+          w.resolve(msg); return;
         }
       }
       queue.push(msg);
     }
-
     function receive(type){
       return new Promise((resolve, reject) => {
         for (let i = 0; i < queue.length; i++){
-          if (queue[i].type === type){
-            resolve(queue.splice(i, 1)[0]);
-            return;
-          }
+          if (queue[i].type === type){ resolve(queue.splice(i, 1)[0]); return; }
         }
         const w = { type, resolve, reject };
         waiters.push(w);
         setTimeout(() => {
           const i = waiters.indexOf(w);
-          if (i >= 0){
-            waiters.splice(i, 1);
-            reject(new Error('Timeout waiting for "' + type + '"'));
-          }
+          if (i >= 0){ waiters.splice(i, 1); reject(new Error('Timeout waiting for "' + type + '"')); }
         }, RECV_TIMEOUT_MS);
       });
     }
-
     conn.on('data', (obj) => {
-      if (obj && typeof obj === 'object' && typeof obj.type === 'string'){
-        dispatch(obj);
-      }
+      if (obj && typeof obj === 'object' && typeof obj.type === 'string'){ dispatch(obj); }
     });
-
     conn.on('close', () => { closed = true; });
-    conn.on('error', () => { closed = true; });
-
+    conn.on('error', (e) => { closed = true; log('conn error: ' + (e && e.message || e)); });
     return {
       send: (obj) => { try { conn.send(obj); } catch(e){} },
       receive,
@@ -293,22 +451,7 @@
   }
 
   /* ============================================================
-     SDP codec (manual transport)
-     ============================================================ */
-
-  function encodeCode(sdp){
-    return btoa(unescape(encodeURIComponent(sdp)))
-      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-  function decodeCode(code){
-    let c = String(code || '').trim().replace(/\s+/g, '');
-    c = c.replace(/-/g, '+').replace(/_/g, '/');
-    while (c.length % 4) c += '=';
-    return decodeURIComponent(escape(atob(c)));
-  }
-
-  /* ============================================================
-     Peer connection helpers (manual transport)
+     ICE helpers
      ============================================================ */
 
   function waitForIce(conn){
@@ -316,8 +459,7 @@
       if (conn.iceGatheringState === 'complete') return resolve();
       const done = () => {
         if (conn.iceGatheringState === 'complete'){
-          conn.removeEventListener('icegatheringstatechange', done);
-          resolve();
+          conn.removeEventListener('icegatheringstatechange', done); resolve();
         }
       };
       conn.addEventListener('icegatheringstatechange', done);
@@ -326,86 +468,179 @@
   }
 
   /* ============================================================
-     Sync protocol — shared by both transports
+     Sync protocol
      ============================================================ */
 
   async function runSync(ch){
     try {
+      log('Starting sync protocol...');
       const mine = await notesProvider();
       const deviceName = describeDevice();
       const myCode = getDeviceCode();
+      log('Sending hello (' + mine.length + ' notes)...');
 
       ch.send({ type: 'hello', deviceName, deviceCode: myCode, count: mine.length });
       const theirHello = await ch.receive('hello');
+      log('Peer identified as ' + (theirHello.deviceName || 'unknown'));
 
-      setState('syncing', 'Connected to ' + (theirHello.deviceName || 'peer') + '. Sending notes...');
-
+      setState('syncing', 'Sending ' + mine.length + ' notes...');
       ch.send({ type: 'notes', notes: mine });
+
       const theirsMsg = await ch.receive('notes');
       const theirs = Array.isArray(theirsMsg.notes) ? theirsMsg.notes : [];
+      log('Received ' + theirs.length + ' notes. Merging...');
 
-      setState('syncing', 'Merging ' + theirs.length + ' notes from peer...');
       const result = await notesReceiver(theirs);
+      log('Merged: +' + result.added + ' ~' + result.updated + ' -' + result.deleted);
 
-      // Remember the peer for auto-reconnect
-      if (theirHello.deviceCode){
-        savePairedPeer(theirHello.deviceCode, theirHello.deviceName);
-      }
+      if (theirHello.deviceCode){ savePairedPeer(theirHello.deviceCode, theirHello.deviceName); }
 
       ch.send({ type: 'done', result });
-      const theirDone = await ch.receive('done');
+      await ch.receive('done');
+      log('Sync complete.');
 
       setState('done', 'Sync complete.');
       onDone && onDone({
-        local: result,
-        remote: theirDone.result || {},
+        local: result, remote: {},
         peerDevice: theirHello.deviceName || 'peer',
       });
-
       setTimeout(() => { try { ch.close(); } catch(e){} }, 400);
     } catch (err){
+      log('Sync protocol failed: ' + (err && err.message ? err.message : err));
       fail(err);
     }
   }
 
   /* ============================================================
-     Public — PeerJS quick flows
+     LOCAL QR FLOW — pure WebRTC over LAN, no server
+     ============================================================ */
+
+  async function startLocalHost(){
+    reset();
+    clearLog();
+    role = 'host';
+    setState('creating-offer', 'Creating offer...');
+    log('Local QR mode: creating RTCPeerConnection');
+
+    localPC = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    localPC.oniceconnectionstatechange = () => {
+      log('ICE: ' + localPC.iceConnectionState);
+      if (localPC.iceConnectionState === 'failed'){
+        fail(new Error('ICE failed. Are both devices on the same Wi-Fi?'));
+      }
+    };
+
+    const dc = localPC.createDataChannel('sync', { ordered: true });
+    dc.addEventListener('open', () => {
+      log('Data channel open');
+      channel = makeRTCChannel(dc);
+      setState('syncing', 'Connected. Starting sync...');
+      runSync(channel).catch(err => fail(err));
+    });
+
+    const offer = await localPC.createOffer();
+    await localPC.setLocalDescription(offer);
+    await waitForIce(localPC);
+
+    const sdp = localPC.localDescription.sdp;
+    log('Offer SDP: ' + sdp.length + ' chars');
+    const qrText = await encodeSDPForQR(sdp, 'offer');
+    log('QR payload: ' + qrText.length + ' chars');
+    return qrText;
+  }
+
+  async function consumeLocalAnswer(qrText){
+    const decoded = await decodeSDPFromQR(qrText);
+    if (!decoded) throw new Error('That QR is not a Cortex answer.');
+    if (decoded.tag !== 'answer') throw new Error('That QR is a "' + decoded.tag + '", not an answer.');
+    log('Answer decoded: ' + decoded.sdp.length + ' chars');
+    setState('waiting-connect', 'Connecting...');
+    await localPC.setRemoteDescription({ type: 'answer', sdp: decoded.sdp });
+  }
+
+  async function startLocalGuest(){
+    reset();
+    clearLog();
+    role = 'guest';
+    setState('creating-answer', 'Waiting for offer...');
+    log('Local QR mode: guest waiting for host QR');
+
+    localPC = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    localPC.oniceconnectionstatechange = () => {
+      log('ICE: ' + localPC.iceConnectionState);
+      if (localPC.iceConnectionState === 'failed'){
+        fail(new Error('ICE failed. Are both devices on the same Wi-Fi?'));
+      }
+    };
+    localPC.ondatachannel = (e) => {
+      const dc = e.channel;
+      dc.addEventListener('open', () => {
+        log('Data channel open');
+        channel = makeRTCChannel(dc);
+        setState('syncing', 'Connected. Starting sync...');
+        runSync(channel).catch(err => fail(err));
+      });
+    };
+  }
+
+  async function consumeLocalOffer(qrText){
+    const decoded = await decodeSDPFromQR(qrText);
+    if (!decoded) throw new Error('That QR is not a Cortex offer.');
+    if (decoded.tag !== 'offer') throw new Error('That QR is a "' + decoded.tag + '", not an offer.');
+    log('Offer decoded: ' + decoded.sdp.length + ' chars');
+
+    await localPC.setRemoteDescription({ type: 'offer', sdp: decoded.sdp });
+    const answer = await localPC.createAnswer();
+    await localPC.setLocalDescription(answer);
+    await waitForIce(localPC);
+
+    const sdp = localPC.localDescription.sdp;
+    log('Answer SDP: ' + sdp.length + ' chars');
+    const qrText = await encodeSDPForQR(sdp, 'answer');
+    log('QR payload: ' + qrText.length + ' chars');
+    setState('waiting-connect', 'Show this QR to the host, then wait...');
+    return qrText;
+  }
+
+  /* ============================================================
+     PEERJS FLOW (existing)
      ============================================================ */
 
   async function startQuickHost(){
     await loadPeerJS();
     reset();
+    clearLog();
     role = 'host';
 
     const myCode = getDeviceCode();
     const peerId = PEER_PREFIX + myCode;
-
-    setState('waiting-connect', 'Waiting for the other device to connect...');
+    log('PeerJS host: ' + formatCode(myCode));
+    setState('waiting-connect', 'Waiting for the other device...');
 
     return new Promise((resolve, reject) => {
-      pjsPeer = new global.Peer(peerId, { debug: 0 });
       let settled = false;
-
+      pjsPeer = new global.Peer(peerId, { debug: 0 });
       pjsPeer.on('open', () => {
+        log('Signaling server: connected');
         if (settled) return;
         settled = true;
         resolve({ code: myCode });
       });
-
       pjsPeer.on('connection', (conn) => {
+        log('Incoming connection');
         pjsConn = conn;
         channel = makePeerJSChannel(conn);
-        setState('syncing', 'Connected. Starting sync...');
-        runSync(channel).catch(err => fail(err));
+        conn.on('open', () => {
+          log('Data channel open');
+          setState('syncing', 'Connected. Starting sync...');
+          runSync(channel).catch(err => fail(err));
+        });
       });
-
       pjsPeer.on('error', (err) => {
-        if (settled){
-          fail(err);
-        } else {
-          settled = true;
-          reject(err);
-        }
+        const msg = err && err.type ? err.type : (err && err.message ? err.message : String(err));
+        log('Peer error: ' + msg);
+        if (!settled){ settled = true; reject(err); }
+        else { fail(err); }
       });
     });
   }
@@ -413,178 +648,92 @@
   async function joinQuick(code){
     await loadPeerJS();
     reset();
+    clearLog();
     role = 'guest';
+    const norm = normalizeCode(code);
+    const target = PEER_PREFIX + norm;
+    log('PeerJS guest: connecting to ' + formatCode(norm));
+    setState('waiting-connect', 'Connecting...');
 
-    const target = PEER_PREFIX + normalizeCode(code);
-    setState('waiting-connect', 'Connecting to ' + formatCode(normalizeCode(code)) + '...');
-
-    return new Promise((resolve, reject) => {
-      pjsPeer = new global.Peer({ debug: 0 });
+    return await new Promise((resolve, reject) => {
       let settled = false;
-
+      pjsPeer = new global.Peer({ debug: 0 });
       pjsPeer.on('open', () => {
+        log('Signaling server: connected');
         const conn = pjsPeer.connect(target, { reliable: true });
         pjsConn = conn;
         channel = makePeerJSChannel(conn);
-
         conn.on('open', () => {
+          log('Data channel open');
           if (settled) return;
           settled = true;
           setState('syncing', 'Connected. Starting sync...');
           resolve();
           runSync(channel).catch(err => fail(err));
         });
-
         setTimeout(() => {
           if (settled) return;
           settled = true;
           try { conn.close(); } catch(e){}
-          reject(new Error('Connection timed out. Check the code and that both devices are online.'));
+          try { pjsPeer.destroy(); } catch(e){}
+          reject(new Error('Timed out. Try again, or use Local QR if both devices are on the same Wi-Fi.'));
         }, CONNECT_TIMEOUT_MS);
       });
-
       pjsPeer.on('error', (err) => {
+        const msg = err && err.type ? err.type : (err && err.message ? err.message : String(err));
+        log('Peer error: ' + msg);
         if (settled) return;
         settled = true;
-        if (err.type === 'peer-unavailable'){
-          reject(new Error('No device is online with that code.'));
+        if (err && err.type === 'peer-unavailable'){
+          reject(new Error('No device is online with code ' + formatCode(norm) + '.'));
         } else {
-          reject(err);
+          reject(new Error('Signaling failed: ' + msg));
         }
       });
     });
   }
 
-  /* ============================================================
-     Public — Auto reconnect (background)
-     ============================================================ */
-
   async function tryAutoReconnect(){
     if (!getAutoSync()) return { ok: false, reason: 'auto-sync disabled' };
     if (state === 'syncing' || state === 'waiting-connect') return { ok: false, reason: 'busy' };
-
     const paired = getPairedPeer();
-    if (!paired) return { ok: false, reason: 'no paired peer' };
+    if (!paired || !paired.code) return { ok: false, reason: 'no paired peer' };
 
-    // We don't know if the other device is online. PeerJS will tell us.
-    try {
-      await loadPeerJS();
-    } catch(e){
-      return { ok: false, reason: 'PeerJS unavailable' };
-    }
+    try { await loadPeerJS(); }
+    catch(e){ return { ok: false, reason: 'PeerJS unavailable' }; }
 
     reset();
     role = 'guest';
-
     const target = PEER_PREFIX + paired.code;
 
     return new Promise((resolve) => {
       let settled = false;
       const done = (val) => { if (!settled){ settled = true; resolve(val); } };
-
       pjsPeer = new global.Peer({ debug: 0 });
-
       pjsPeer.on('open', () => {
         const conn = pjsPeer.connect(target, { reliable: true });
         pjsConn = conn;
         channel = makePeerJSChannel(conn);
-
         conn.on('open', () => {
-          setState('syncing', 'Auto-syncing with ' + (paired.name || 'paired device') + '...');
-          onProgress && onProgress({ state: 'auto-syncing', message: 'Auto-syncing with ' + (paired.name || 'peer') + '...' });
+          log('Auto-sync: connected');
+          setState('syncing', 'Auto-syncing...');
           runSync(channel).catch(() => {});
           done({ ok: true });
         });
-
         setTimeout(() => {
           if (settled) return;
           try { conn.close(); } catch(e){}
           try { pjsPeer.destroy(); } catch(e){}
-          reset();
-          setState('idle', '');
+          reset(); setState('idle', '');
           done({ ok: false, reason: 'timeout' });
-        }, 6000);
+        }, 8000);
       });
-
       pjsPeer.on('error', () => {
         try { pjsPeer.destroy(); } catch(e){}
-        reset();
-        setState('idle', '');
+        reset(); setState('idle', '');
         done({ ok: false, reason: 'peer unavailable' });
       });
     });
-  }
-
-  /* ============================================================
-     Public — Manual flows (existing)
-     ============================================================ */
-
-  async function startManualHost(){
-    reset();
-    role = 'host';
-    setState('creating-offer', 'Creating connection code...');
-
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'failed') fail(new Error('ICE failed. Same Wi-Fi?'));
-    };
-
-    const dc = pc.createDataChannel('sync', { ordered: true });
-    dc.addEventListener('open', () => {
-      channel = makeRTCChannel(dc);
-      setState('syncing', 'Connected. Starting sync...');
-      runSync(channel).catch(err => fail(err));
-    });
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    await waitForIce(pc);
-
-    manualPC = pc;
-    setState('waiting-answer', 'Waiting for the other device to answer...');
-    return encodeCode(pc.localDescription.sdp);
-  }
-
-  let manualPC = null;
-
-  async function acceptManualAnswer(code){
-    if (!manualPC) throw new Error('Not hosting');
-    let sdp;
-    try { sdp = decodeCode(code); }
-    catch(e){ throw new Error('That answer code is malformed.'); }
-    setState('waiting-connect', 'Connecting...');
-    await manualPC.setRemoteDescription({ type: 'answer', sdp });
-  }
-
-  async function joinManualOffer(code){
-    reset();
-    role = 'guest';
-    setState('creating-answer', 'Reading host code...');
-    let sdp;
-    try { sdp = decodeCode(code); }
-    catch(e){ throw new Error('That host code is malformed.'); }
-
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'failed') fail(new Error('ICE failed. Same Wi-Fi?'));
-    };
-    pc.ondatachannel = (e) => {
-      const dc = e.channel;
-      dc.addEventListener('open', () => {
-        channel = makeRTCChannel(dc);
-        setState('syncing', 'Connected. Starting sync...');
-        runSync(channel).catch(err => fail(err));
-      });
-    };
-
-    await pc.setRemoteDescription({ type: 'offer', sdp });
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    await waitForIce(pc);
-
-    manualPC = pc;
-    setState('waiting-connect', 'Send the answer code back, then wait...');
-    return encodeCode(pc.localDescription.sdp);
   }
 
   /* ============================================================
@@ -598,29 +747,32 @@
     try { pjsConn && pjsConn.close(); } catch(e){}
     try { pjsPeer && pjsPeer.destroy(); } catch(e){}
     try { manualPC && manualPC.close(); } catch(e){}
-    pjsConn = null; pjsPeer = null; manualPC = null; channel = null;
+    try { localPC && localPC.close(); } catch(e){}
+    pjsConn = null; pjsPeer = null; manualPC = null; localPC = null; channel = null;
   }
 
   function reset(){
+    stopScan();
     try { channel && channel.close(); } catch(e){}
     try { pjsConn && pjsConn.close(); } catch(e){}
     try { pjsPeer && pjsPeer.destroy(); } catch(e){}
     try { manualPC && manualPC.close(); } catch(e){}
-    channel = null; pjsConn = null; pjsPeer = null; manualPC = null;
+    try { localPC && localPC.close(); } catch(e){}
+    channel = null; pjsConn = null; pjsPeer = null; manualPC = null; localPC = null;
     state = 'idle';
   }
 
   function setState(s, msg){
     state = s;
-    onProgress && onProgress({ state: s, message: msg || describeState(s) });
+    onProgress && onProgress({ state: s, message: msg || describeState(s), log: logLines.slice() });
   }
 
   function describeState(s){
     return ({
       'idle': 'Ready',
-      'creating-offer': 'Creating connection code...',
-      'waiting-answer': 'Waiting for answer code...',
-      'creating-answer': 'Creating answer code...',
+      'creating-offer': 'Creating offer...',
+      'creating-answer': 'Creating answer...',
+      'waiting-answer': 'Waiting for answer...',
       'waiting-connect': 'Connecting...',
       'syncing': 'Syncing...',
       'done': 'Done',
@@ -649,15 +801,23 @@
      ============================================================ */
 
   global.CortexSync = {
-    // PeerJS quick flows
+    // Local QR flow (new primary)
+    startLocalHost,
+    consumeLocalAnswer,
+    startLocalGuest,
+    consumeLocalOffer,
+
+    // PeerJS flows
     startQuickHost,
     joinQuick,
     tryAutoReconnect,
 
-    // Manual flows (fallback)
-    startManualHost,
-    acceptManualAnswer,
-    joinManualOffer,
+    // QR helpers
+    drawQR,
+    startScan,
+    stopScan,
+    encodeSDPForQR,
+    decodeSDPFromQR,
 
     // Shared
     reset,
@@ -669,8 +829,8 @@
     forgetPairedPeer,
     getAutoSync,
     setAutoSync,
-
-    // Callbacks
+    getLog: () => logLines.slice(),
+    clearLog,
     setProgressCallback: (fn) => { onProgress = fn; },
     setDoneCallback: (fn) => { onDone = fn; },
     setErrorCallback: (fn) => { onError = fn; },
@@ -680,4 +840,4 @@
     getRole: () => role,
   };
 
-})(window);
+})(window); 
