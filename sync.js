@@ -1,11 +1,4 @@
-/* Cortex Sync v18 — Local QR pairing via compressed SDP.
-
-   Primary transport: WebRTC over LAN with QR-encoded SDP.
-     - SDP is gzip-compressed then base64url-encoded for QR
-     - No signaling server, no PeerJS, no external dependency
-
-   Secondary: PeerJS (for devices not on the same Wi-Fi)
-   Fallback:  manual SDP codes */
+/* Cortex Sync v18 — Local QR pairing via compressed SDP. */
 
 (function(global){
   'use strict';
