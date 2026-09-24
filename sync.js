@@ -3,10 +3,9 @@
    Primary transport: WebRTC over LAN with QR-encoded SDP.
      - SDP is gzip-compressed then base64url-encoded for QR
      - No signaling server, no PeerJS, no external dependency
-     - STUN included as fallback but LAN candidates suffice
 
    Secondary: PeerJS (for devices not on the same Wi-Fi)
-   Fallback:  manual SDP codes (deep advanced) */
+   Fallback:  manual SDP codes */
 
 (function(global){
   'use strict';
@@ -33,7 +32,6 @@
   const STORE_PAIRED_PEER = 'cortex.paired.peer.v1';
   const STORE_AUTO_SYNC = 'cortex.autosync.v1';
 
-  // ---- state ----
   let channel = null;
   let role = null;
   let state = 'idle';
@@ -55,10 +53,8 @@
   let qrScanLoading = null;
 
   let activeScanStop = null;
-  let manualPC = null;
-  let localPC = null;   // PC used by the local QR flow
+  let localPC = null;
 
-  // ---- logging ----
   const logLines = [];
   function log(msg){
     const t = new Date().toLocaleTimeString('en-GB', { hour12: false });
@@ -69,10 +65,6 @@
     onProgress && onProgress({ state: 'log', message: line, log: logLines.slice() });
   }
   function clearLog(){ logLines.length = 0; }
-
-  /* ============================================================
-     Device code
-     ============================================================ */
 
   function generateCode(){
     let s = '';
@@ -103,10 +95,6 @@
   function normalizeCode(input){
     return String(input || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   }
-
-  /* ============================================================
-     Paired peer
-     ============================================================ */
 
   function getPairedPeer(){
     try {
@@ -139,10 +127,6 @@
   function setAutoSync(on){
     try { localStorage.setItem(STORE_AUTO_SYNC, on ? '1' : '0'); } catch(e){}
   }
-
-  /* ============================================================
-     Library loaders
-     ============================================================ */
 
   function loadScript(src){
     return new Promise((resolve, reject) => {
@@ -188,14 +172,10 @@
     return qrScanLoading;
   }
 
-  /* ============================================================
-     Compression (gzip via CompressionStream)
-     ============================================================ */
-
   const hasCompression = (typeof CompressionStream === 'function') && (typeof DecompressionStream === 'function');
 
   async function compressString(str){
-    if (!hasCompression) return str;   // pass-through
+    if (!hasCompression) return new TextEncoder().encode(str);
     const bytes = new TextEncoder().encode(str);
     const cs = new CompressionStream('gzip');
     const writer = cs.writable.getWriter();
@@ -250,20 +230,13 @@
       const sdp = payload.slice(idx + 1);
       if (!sdp.startsWith('v=')) return null;
       return { tag, sdp };
-    } catch(e){
-      return null;
-    }
+    } catch(e){ return null; }
   }
-
-  /* ============================================================
-     QR rendering + scanning
-     ============================================================ */
 
   async function drawQR(text, imgEl, options){
     await loadQRGen();
     const opts = Object.assign({
-      errorCorrectionLevel: 'L',      // Low = max data capacity
-      width: 480, margin: 1,
+      errorCorrectionLevel: 'L', width: 480, margin: 1,
       color: { dark: '#000000', light: '#ffffff' },
     }, options || {});
     return new Promise((resolve, reject) => {
@@ -342,10 +315,6 @@
       activeScanStop = null;
     }
   }
-
-  /* ============================================================
-     Channels
-     ============================================================ */
 
   function makeRTCChannel(dc){
     const queue = []; const waiters = []; const chunks = new Map();
@@ -450,10 +419,6 @@
     };
   }
 
-  /* ============================================================
-     ICE helpers
-     ============================================================ */
-
   function waitForIce(conn){
     return new Promise(resolve => {
       if (conn.iceGatheringState === 'complete') return resolve();
@@ -466,10 +431,6 @@
       setTimeout(resolve, ICE_WAIT_MS);
     });
   }
-
-  /* ============================================================
-     Sync protocol
-     ============================================================ */
 
   async function runSync(ch){
     try {
@@ -510,10 +471,6 @@
       fail(err);
     }
   }
-
-  /* ============================================================
-     LOCAL QR FLOW — pure WebRTC over LAN, no server
-     ============================================================ */
 
   async function startLocalHost(){
     reset();
@@ -602,10 +559,6 @@
     return qrText;
   }
 
-  /* ============================================================
-     PEERJS FLOW (existing)
-     ============================================================ */
-
   async function startQuickHost(){
     await loadPeerJS();
     reset();
@@ -676,7 +629,7 @@
           settled = true;
           try { conn.close(); } catch(e){}
           try { pjsPeer.destroy(); } catch(e){}
-          reject(new Error('Timed out. Try again, or use Local QR if both devices are on the same Wi-Fi.'));
+          reject(new Error('Timed out. Try Local QR if both devices are on the same Wi-Fi.'));
         }, CONNECT_TIMEOUT_MS);
       });
       pjsPeer.on('error', (err) => {
@@ -736,19 +689,14 @@
     });
   }
 
-  /* ============================================================
-     Utility
-     ============================================================ */
-
   function fail(err){
     setState('error', err && err.message ? err.message : String(err));
     onError && onError(err);
     try { channel && channel.close(); } catch(e){}
     try { pjsConn && pjsConn.close(); } catch(e){}
     try { pjsPeer && pjsPeer.destroy(); } catch(e){}
-    try { manualPC && manualPC.close(); } catch(e){}
     try { localPC && localPC.close(); } catch(e){}
-    pjsConn = null; pjsPeer = null; manualPC = null; localPC = null; channel = null;
+    pjsConn = null; pjsPeer = null; localPC = null; channel = null;
   }
 
   function reset(){
@@ -756,9 +704,8 @@
     try { channel && channel.close(); } catch(e){}
     try { pjsConn && pjsConn.close(); } catch(e){}
     try { pjsPeer && pjsPeer.destroy(); } catch(e){}
-    try { manualPC && manualPC.close(); } catch(e){}
     try { localPC && localPC.close(); } catch(e){}
-    channel = null; pjsConn = null; pjsPeer = null; manualPC = null; localPC = null;
+    channel = null; pjsConn = null; pjsPeer = null; localPC = null;
     state = 'idle';
   }
 
@@ -772,7 +719,6 @@
       'idle': 'Ready',
       'creating-offer': 'Creating offer...',
       'creating-answer': 'Creating answer...',
-      'waiting-answer': 'Waiting for answer...',
       'waiting-connect': 'Connecting...',
       'syncing': 'Syncing...',
       'done': 'Done',
@@ -796,39 +742,13 @@
     return os ? browser + ' on ' + os : browser;
   }
 
-  /* ============================================================
-     Public API
-     ============================================================ */
-
   global.CortexSync = {
-    // Local QR flow (new primary)
-    startLocalHost,
-    consumeLocalAnswer,
-    startLocalGuest,
-    consumeLocalOffer,
-
-    // PeerJS flows
-    startQuickHost,
-    joinQuick,
-    tryAutoReconnect,
-
-    // QR helpers
-    drawQR,
-    startScan,
-    stopScan,
-    encodeSDPForQR,
-    decodeSDPFromQR,
-
-    // Shared
-    reset,
-    getDeviceCode,
-    formatCode,
-    normalizeCode,
-    getPairedPeer,
-    savePairedPeer,
-    forgetPairedPeer,
-    getAutoSync,
-    setAutoSync,
+    startLocalHost, consumeLocalAnswer, startLocalGuest, consumeLocalOffer,
+    startQuickHost, joinQuick, tryAutoReconnect,
+    drawQR, startScan, stopScan, encodeSDPForQR, decodeSDPFromQR,
+    reset, getDeviceCode, formatCode, normalizeCode,
+    getPairedPeer, savePairedPeer, forgetPairedPeer,
+    getAutoSync, setAutoSync,
     getLog: () => logLines.slice(),
     clearLog,
     setProgressCallback: (fn) => { onProgress = fn; },
@@ -840,4 +760,4 @@
     getRole: () => role,
   };
 
-})(window); 
+})(window);
