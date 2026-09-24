@@ -203,7 +203,8 @@
     return out;
   }
 
-  async function encodeSDPForQR(sdp, tag){
+/* SYNC PART 2 */
+   async function encodeSDPForQR(sdp, tag){
     const payload = tag + ':' + sdp;
     const bytes = await compressString(payload);
     const b64 = bytesToBase64Url(bytes);
@@ -533,7 +534,8 @@
     };
   }
 
-  async function consumeLocalOffer(qrText){
+/* SYNC PART 3 */
+   async function consumeLocalOffer(qrText){
     const decoded = await decodeSDPFromQR(qrText);
     if (!decoded) throw new Error('That QR is not a Cortex offer.');
     if (decoded.tag !== 'offer') throw new Error('That QR is a "' + decoded.tag + '", not an offer.');
