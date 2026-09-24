@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://esm.run;
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com;
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: https://huggingface.co https://*.huggingface.co https://*.hf.co https://raw.githubusercontent.com https://*.githubusercontent.com;
   font-src 'self';
-  connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://esm.run https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https://raw.githubusercontent.com https://*.githubusercontent.com https://github.com https://objects.githubusercontent.com wss://0.peerjs.com https://0.peerjs.com;
+  connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https://raw.githubusercontent.com https://*.githubusercontent.com https://github.com https://objects.githubusercontent.com wss://0.peerjs.com https://0.peerjs.com;
   worker-src 'self' blob:;
   base-uri 'self';
   form-action 'none';
@@ -452,7 +452,7 @@ body{
       <div id="embedFooter" title="Tap to re-index all notes">
         <span id="embedDot"></span>
         <span id="embedStatusText">Search index: idle</span>
-        <span id="versionStamp">v17</span>
+        <span id="versionStamp">v18</span>
       </div>
     </aside>
     <section id="editorPane">
@@ -540,7 +540,7 @@ body{
 <script>
 "use strict";
 
-const APP_VERSION = 'v17';
+const APP_VERSION = 'v18';
 const EXPORT_VERSION = 1;
 console.log('[Cortex] App version:', APP_VERSION);
 
@@ -1296,7 +1296,7 @@ async function purgeOldTombstones(){
 }
 
 /* ============================================================
-   Wiki link nav
+   Wiki link nav + autocomplete
    ============================================================ */
 async function navigateToWikiLink(target){
   const existing = noteByTitle(target);
@@ -1454,7 +1454,7 @@ function renderMenu(){
 
   menuCard.appendChild(menuItem({
     label: '🔗  Sync across devices',
-    desc: 'Peer-to-peer over Wi-Fi. No server.',
+    desc: 'QR pairing over LAN, or short codes over the internet.',
     onClick: () => { closeMenu(); openSyncModal(); },
   }));
 
@@ -1605,7 +1605,7 @@ function importWorkspace(){
           embedSweep().catch(() => {});
           alert('Imported ' + cleaned.length + ' notes.');
         } catch(err){
-          alert('Import failed: ' + (err && err.message ? err.message : err));
+          alert('Import failed: ' + (err && err.message ? err.message : String(err)));
         }
       })();
     };
@@ -1706,7 +1706,7 @@ async function selectModel(tier){
 }
 
 /* ============================================================
-   Chat
+   Chat — WebLLM + RAG
    ============================================================ */
 function updateFastChip(){
   if (fastMode) chipFast.classList.add('on');
@@ -1781,9 +1781,7 @@ async function startEngineLoad(){
   }
   const tierInfo = MODEL_CATALOG[CURRENT_TIER];
   const deviceEl = document.getElementById('chatProgressDevice');
-  if (deviceEl){
-    deviceEl.textContent = 'Loading ' + tierInfo.label + ' (' + tierInfo.size + ').';
-  }
+  if (deviceEl){ deviceEl.textContent = 'Loading ' + tierInfo.label + ' (' + tierInfo.size + ').'; }
   setModelState('loading', 'loading');
   showChatProgress('Downloading model (' + tierInfo.size + '). One time.', 0);
   const myGen = ++llmGeneration;
@@ -1976,11 +1974,11 @@ document.getElementById('quickExplain').addEventListener('click', () => {
 });
 document.getElementById('quickQuestions').addEventListener('click', () => {
   chatInput.value = 'Suggest 5 follow-up questions based on this note.'; chatInput.focus();
+});
 
-  /* ============================================================
+/* ============================================================
    Sync
    ============================================================ */
-
 function openSyncModal(){ renderSyncLanding(); syncModal.classList.add('open'); }
 function closeSyncModal(){
   syncModal.classList.remove('open');
@@ -2044,8 +2042,6 @@ function renderSyncLanding(){
   syncCard.appendChild(menuItem({ label: 'Close', onClick: closeSyncModal }));
 }
 
-/* ---- Local QR flow entry ---- */
-
 function startLocalPairingEntry(){
   syncCard.textContent = '';
 
@@ -2071,8 +2067,6 @@ function startLocalPairingEntry(){
   }));
   syncCard.appendChild(menuItem({ label: 'Back', onClick: renderSyncLanding }));
 }
-
-/* ---- Host view: show offer QR, then scan answer ---- */
 
 async function startLocalHostView(){
   syncCard.textContent = '';
@@ -2175,8 +2169,6 @@ async function startLocalHostView(){
   });
 }
 
-/* ---- Guest view: scan offer QR, then show answer QR ---- */
-
 async function startLocalGuestView(){
   syncCard.textContent = '';
 
@@ -2271,8 +2263,6 @@ async function startLocalGuestView(){
   const st = document.getElementById('syncStatusBox');
   if (st) st.querySelector('.val').textContent = 'Camera ready. Point at the offer QR.';
 }
-
-/* ---- PeerJS entry (kept as alternative) ---- */
 
 function startPeerJSFlow(){
   syncCard.textContent = '';
@@ -2383,8 +2373,6 @@ function startPeerJSJoinView(){
   syncCard.appendChild(body);
   setTimeout(() => input.focus(), 100);
 }
-
-/* ---- Shared helpers ---- */
 
 function updateSyncProgress(payload){
   const state = payload.state;
@@ -2509,6 +2497,7 @@ async function mergeFromPeer(theirs){
   }
   return { added, updated, deleted, total: visibleNotes().length };
 }
+
 /* ============================================================
    Events
    ============================================================ */
@@ -2649,7 +2638,6 @@ async function init(){
     }, 1200);
   }
 }
-
 init().catch((err) => {
   console.error('[Cortex] Init failed:', err);
   if (window.__showErr) window.__showErr('Init failed', err && err.message ? err.message : String(err));
