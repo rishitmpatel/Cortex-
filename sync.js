@@ -1,4 +1,4 @@
-/* Cortex Sync v18 — Local QR pairing via compressed SDP. */
+/* Cortex Sync v19 — Local QR pairing via compressed SDP. */
 
 (function(global){
   'use strict';
@@ -34,6 +34,7 @@
   let onError = null;
   let notesProvider = null;
   let notesReceiver = null;
+  let approveHandler = null;
 
   let pjsPeer = null;
   let pjsConn = null;
@@ -59,10 +60,24 @@
   }
   function clearLog(){ logLines.length = 0; }
 
+  /* Unbiased random int via crypto (Math.random is predictable). */
+  function randomInt(n){
+    const cr = global.crypto;
+    if (!cr || !cr.getRandomValues) throw new Error('Secure random not available.');
+    const max = Math.floor(0x100000000 / n) * n;
+    const buf = new Uint32Array(1);
+    do { cr.getRandomValues(buf); } while (buf[0] >= max);
+    return buf[0] % n;
+  }
+
+  function cleanPeerName(name){
+    return String(name == null ? '' : name).replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 60);
+  }
+
   function generateCode(){
     let s = '';
     for (let i = 0; i < CODE_LENGTH; i++){
-      s += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+      s += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
     }
     return s;
   }
@@ -104,7 +119,7 @@
     try {
       localStorage.setItem(STORE_PAIRED_PEER, JSON.stringify({
         code: code || existing.code || '',
-        name: name || existing.name || '',
+        name: cleanPeerName(name) || existing.name || '',
         lastSync: Date.now(),
       }));
     } catch(e){}
@@ -359,8 +374,10 @@
         const idx = parseInt(rest.slice(c1 + 1, c2), 10);
         const total = parseInt(rest.slice(c2 + 1, c3), 10);
         const part = rest.slice(c3 + 1);
+        if (!(total > 0 && total <= 4000) || !(idx >= 0 && idx < total) || chunks.size > 8) return;
         let entry = chunks.get(id);
         if (!entry){ entry = { total, parts: new Array(total) }; chunks.set(id, entry); }
+        if (entry.total !== total) return;
         entry.parts[idx] = part;
         let complete = true;
         for (let i = 0; i < entry.total; i++){ if (entry.parts[i] === undefined){ complete = false; break; } }
@@ -426,7 +443,8 @@
     });
   }
 
-  async function runSync(ch){
+  async function runSync(ch, opts){
+    opts = opts || {};
     try {
       log('Starting sync protocol...');
       const mine = await notesProvider();
@@ -436,12 +454,27 @@
 
       ch.send({ type: 'hello', deviceName, deviceCode: myCode, count: mine.length });
       const theirHello = await ch.receive('hello');
+      theirHello.deviceName = cleanPeerName(theirHello.deviceName);
       log('Peer identified as ' + (theirHello.deviceName || 'unknown'));
+
+      /* Short-code hosts: anyone who guesses the code could connect, so ask first. */
+      if (opts.requireApproval){
+        let ok = false;
+        try { ok = approveHandler ? await approveHandler(theirHello.deviceName || 'Unknown device') : false; }
+        catch(e){ ok = false; }
+        if (!ok){
+          ch.send({ type: 'denied' });
+          throw new Error('Sync declined on this device.');
+        }
+      }
 
       setState('syncing', 'Sending ' + mine.length + ' notes...');
       ch.send({ type: 'notes', notes: mine });
 
-      const theirsMsg = await ch.receive('notes');
+      const theirsMsg = await Promise.race([
+        ch.receive('notes'),
+        ch.receive('denied').then(() => { throw new Error('The other device declined the sync.'); }),
+      ]);
       const theirs = Array.isArray(theirsMsg.notes) ? theirsMsg.notes : [];
       log('Received ' + theirs.length + ' notes. Merging...');
 
@@ -548,10 +581,10 @@
 
     const sdp = localPC.localDescription.sdp;
     log('Answer SDP: ' + sdp.length + ' chars');
-    const qrText = await encodeSDPForQR(sdp, 'answer');
-    log('QR payload: ' + qrText.length + ' chars');
+    const answerQR = await encodeSDPForQR(sdp, 'answer');
+    log('QR payload: ' + answerQR.length + ' chars');
     setState('waiting-connect', 'Show this QR to the host, then wait...');
-    return qrText;
+    return answerQR;
   }
 
   async function startQuickHost(){
@@ -560,7 +593,8 @@
     clearLog();
     role = 'host';
 
-    const myCode = getDeviceCode();
+    /* Fresh random code per session: not the persistent device id, so it can't be reused or tracked. */
+    const myCode = generateCode();
     const peerId = PEER_PREFIX + myCode;
     log('PeerJS host: ' + formatCode(myCode));
     setState('waiting-connect', 'Waiting for the other device...');
@@ -575,13 +609,19 @@
         resolve({ code: myCode });
       });
       pjsPeer.on('connection', (conn) => {
+        /* One peer per session; refuse extra connections. */
+        if (pjsConn){
+          log('Extra connection refused');
+          try { conn.on('open', () => { try { conn.close(); } catch(e){} }); conn.close(); } catch(e){}
+          return;
+        }
         log('Incoming connection');
         pjsConn = conn;
         channel = makePeerJSChannel(conn);
         conn.on('open', () => {
           log('Data channel open');
           setState('syncing', 'Connected. Starting sync...');
-          runSync(channel).catch(err => fail(err));
+          runSync(channel, { requireApproval: true }).catch(err => fail(err));
         });
       });
       pjsPeer.on('error', (err) => {
@@ -751,6 +791,7 @@
     setErrorCallback: (fn) => { onError = fn; },
     setNotesProvider: (fn) => { notesProvider = fn; },
     setNotesReceiver: (fn) => { notesReceiver = fn; },
+    setApproveHandler: (fn) => { approveHandler = fn; },
     getState: () => state,
     getRole: () => role,
   };
