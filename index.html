@@ -452,7 +452,7 @@ body{
       <div id="embedFooter" title="Tap to re-index all notes">
         <span id="embedDot"></span>
         <span id="embedStatusText">Search index: idle</span>
-        <span id="versionStamp">v18</span>
+        <span id="versionStamp">v19</span>
       </div>
     </aside>
     <section id="editorPane">
@@ -535,12 +535,13 @@ body{
   window.__showErr = showErr;
 })();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js" integrity="sha384-NNQgBjjuhtXzPmmy4gurS5X7P4uTt1DThyevz4Ua0IVK5+kazYQI1W27JHjbbxQz" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" integrity="sha384-+VfUPEb0PdtChMwmBcBmykRMDd+v6D/oFmB3rZM/puCMDYcIvF968OimRh4KQY9a" crossorigin="anonymous"></script>
 <script src="./sync.js" onerror="window.__showErr && window.__showErr('Failed to load sync.js', 'Check that sync.js exists next to index.html in the repo.')"></script>
 <script>
 "use strict";
 
-const APP_VERSION = 'v18';
+const APP_VERSION = 'v19';
 const EXPORT_VERSION = 1;
 console.log('[Cortex] App version:', APP_VERSION);
 
@@ -780,13 +781,12 @@ function escapeHTML(s){
     c === '"' ? '&quot;' : '&#39;');
 }
 function sanitizeHTML(html){
-  html = html.replace(/<\s*\/?\s*(script|style|iframe|object|embed|link|meta|base)\b[^>]*>/gi, '');
-  html = html.replace(/\son\w+\s*=\s*"[^"]*"/gi, '');
-  html = html.replace(/\son\w+\s*=\s*'[^']*'/gi, '');
-  html = html.replace(/\son\w+\s*=\s*[^\s>]+/gi, '');
-  html = html.replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"');
-  html = html.replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'");
-  return html;
+  /* DOMPurify does real HTML parsing. If it failed to load, show escaped text instead. */
+  if (!window.DOMPurify) return '<pre>' + escapeHTML(html) + '</pre>';
+  return window.DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|wiki):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+  });
 }
 function simpleHash(s){
   let h = 5381;
@@ -1210,10 +1210,14 @@ function renderBacklinks(){
 async function saveNote(){
   const n = activeNote();
   if (!n) return;
-  n.title = titleInput.value.trim() || 'Untitled';
-  n.body  = editor.value;
+  const title = titleInput.value.trim() || 'Untitled';
+  const body = editor.value;
+  /* Only bump `updated` on a real edit, or merely opening a note would win sync conflicts. */
+  if (title === n.title && body === n.body) return;
+  n.title = title;
+  n.body  = body;
   n.updated = Date.now();
-  try { await dbPut(n); } catch(e){}
+  try { await dbPut(n); } catch(e){ console.warn('[Cortex] save failed', e); }
 }
 let saveTimer = null;
 function scheduleSave(){
@@ -1787,7 +1791,7 @@ async function startEngineLoad(){
   const myGen = ++llmGeneration;
   llmLoadingPromise = (async () => {
     try {
-      const webllm = await import('https://esm.run/@mlc-ai/web-llm@0.2.78');
+      const webllm = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.78/+esm');
       if (!webllm || typeof webllm.CreateMLCEngine !== 'function') throw new Error('WebLLM missing CreateMLCEngine.');
       const baseList = (webllm.prebuiltAppConfig && webllm.prebuiltAppConfig.model_list) || [];
       if (!baseList.length) throw new Error('Empty model list.');
@@ -2010,8 +2014,8 @@ function renderSyncLanding(){
     const last = paired.lastSync ? new Date(paired.lastSync).toLocaleString() : 'never';
     pcard.innerHTML =
       '<div style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;">Last paired with</div>' +
-      '<div style="font-size:14px;color:var(--text);font-weight:600;">' + (paired.name || 'Unnamed device') + '</div>' +
-      '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Last sync ' + last + '</div>';
+      '<div style="font-size:14px;color:var(--text);font-weight:600;">' + escapeHTML(paired.name || 'Unnamed device') + '</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Last sync ' + escapeHTML(last) + '</div>';
     const forgetBtn = document.createElement('button');
     forgetBtn.className = 'smallBtn';
     forgetBtn.style.marginTop = '8px';
@@ -2438,17 +2442,24 @@ function syncCallbacksInit(){
     }));
   });
   window.CortexSync.setNotesReceiver(async (theirs) => mergeFromPeer(theirs));
+  window.CortexSync.setApproveHandler(async (name) => confirm('"' + name + '" wants to sync notes with this device. Allow?'));
   window.CortexSync.setProgressCallback((p) => updateSyncProgress(p));
   window.CortexSync.setDoneCallback(({ local, remote, peerDevice }) => renderSyncDone(local, remote, peerDevice));
   window.CortexSync.setErrorCallback((err) => renderSyncError(err && err.message ? err.message : String(err)));
 }
 
 async function mergeFromPeer(theirs){
+  /* A peer must not be able to win every future conflict with a far-future timestamp. */
+  const maxTime = Date.now() + 5 * 60 * 1000;
+  const clampTime = (t) => (typeof t === 'number' && isFinite(t)) ? Math.min(Math.max(t, 0), maxTime) : null;
+  const activeBefore = activeId;
+  let activeTouched = false;
   const myMap = new Map(notes.map(n => [n.id, n]));
   let added = 0, updated = 0, deleted = 0;
-  for (const their of theirs){
+  for (let their of theirs){
     if (!their || typeof their.id !== 'string') continue;
     const mine = myMap.get(their.id);
+    their = Object.assign({}, their, { updated: clampTime(their.updated), deletedAt: clampTime(their.deletedAt), created: clampTime(their.created) });
     const theirTime = their.deletedAt || their.updated || 0;
     if (!mine){
       const incoming = {
@@ -2474,6 +2485,7 @@ async function mergeFromPeer(theirs){
       mine.deleted = !!their.deleted;
       mine.deletedAt = (typeof their.deletedAt === 'number') ? their.deletedAt : null;
       await dbPut(mine);
+      if (mine.id === activeBefore) activeTouched = true;
       if (mine.deleted && !wasDeleted){ deleted++; try { await dbDeleteEmbedding(mine.id); } catch(e){} }
       else if (!mine.deleted){ updated++; scheduleEmbed(mine.id); }
     }
@@ -2483,6 +2495,15 @@ async function mergeFromPeer(theirs){
   renderBacklinks();
   if (view === 'preview') updatePreview();
   const active = activeNote();
+  if (active && activeTouched){
+    /* Peer changed the note being edited: show the merged text. */
+    titleInput.value = active.title === 'Untitled' ? '' : (active.title || '');
+    if (editor.value !== (active.body || '')){
+      const pos = Math.min(editor.selectionStart || 0, (active.body || '').length);
+      editor.value = active.body || '';
+      try { editor.setSelectionRange(pos, pos); } catch(e){}
+    }
+  }
   if (!active){
     const vis = visibleNotes();
     if (vis.length){
@@ -2572,7 +2593,10 @@ document.addEventListener('keydown', (e) => {
 });
 window.addEventListener('beforeunload', () => {
   const n = activeNote();
-  if (n){ n.title = titleInput.value.trim() || 'Untitled'; n.body = editor.value; n.updated = Date.now(); }
+  if (n){
+    const t = titleInput.value.trim() || 'Untitled';
+    if (t !== n.title || editor.value !== n.body){ n.title = t; n.body = editor.value; n.updated = Date.now(); }
+  }
 });
 
 /* ============================================================
@@ -2596,6 +2620,7 @@ updateViewport();
    ============================================================ */
 async function init(){
   syncCallbacksInit();
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e){}
 
   try { notes = await dbGetAll(); } catch(e){ notes = []; }
   await purgeOldTombstones();
